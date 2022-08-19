@@ -22,10 +22,7 @@ Find where it says `self.__plot_set_y_ticks()` and change it to `self.__plot_set
 
 ```
 if "min_bound" in kwargs:
-
                 value = kwargs["min_bound"]
-                
                 ylims[:, 0] = np.clip(ylims[:, 0], None, -2 * value)  ## changes made to fix min scaling
-                
                 ylims[:, 1] = np.clip(ylims[:, 1], 2 * value, None)   ## changes made to fix max scaling
 ```
