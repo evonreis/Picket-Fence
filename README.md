@@ -18,9 +18,12 @@ An example is `python3 LLO_picket_fence.py -s "US_KVTX:10BHZ, IU_HKT:00BHZ, IU_T
 
 If you would like the default y-axis to be the threshold (default 500 nm/s), then you need to get the waveform.py file from obspy and make the following changes.
 
-Find where it says `self.__plot_set_y_ticks()` and change it to `self.__plot_set_y_ticks(**kwargs)`. This allows us to pass our variable to the function. Once that is done, go to the function `__plot_set_y_ticks(self, *args, **kwargs)` and at the end of the first if statement, but before the for loop, add the following lines:
+Find where it says `self.__plot_set_y_ticks()` and change it to `self.__plot_set_y_ticks(**kwargs)`. This allows us to pass our variable to the function. Once that is done, go to the function `__plot_set_y_ticks(self, *args, **kwargs)` and at the end of the first if statement after `ylims[:, 1] += yrange_paddings[:] / 2`, we can add the following lines of code:
 
 `if "min_bound" in kwargs:
+
                 value = kwargs["min_bound"]
+                
                 ylims[:, 0] = np.clip(ylims[:, 0], None, -2 * value)  ## changes made to fix min scaling
+                
                 ylims[:, 1] = np.clip(ylims[:, 1], 2 * value, None)   ## changes made to fix max scaling`
