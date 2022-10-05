@@ -42,6 +42,7 @@ import warnings
 import sys
 from scipy import signal
 
+
 try:
     # Py3
     from urllib.request import URLError
@@ -218,11 +219,14 @@ class SeedlinkPlotter(tkinter.Tk):
             Filter=(num,den)
             counter = 0
             for trace in stream:
+                global idx, XOUTS
                 dt = trace.stats.delta
                 totalDuration = len(trace.data) * dt
                 T=np.arange(0.0, totalDuration, dt)
                 trace.data -= np.mean(trace.data)
-                tout, yout, xout=signal.lsim(Filter, trace.data,T)  ## use xout in future implementation
+                tout, yout, xout=signal.lsim(Filter, trace.data, T, X0=XOUTS[idx])  ## use xout in future implementation
+                XOUTS[idx] = xout[-1]
+                idx = (idx + 1) % len(stream)
                 trace.data = yout
     
             threshold = self.threshold # 500 nm/s normally, can be changed in the parameters
@@ -479,8 +483,7 @@ def main():
              'in "NETWORK"_"STATION" format and "selector" a space separated '
              'list of "LOCATION""CHANNEL", e.g. '
              '"IU_KONO:BHE BHN,MN_AQU:HH?.D".', 
-             default="IU_COR:00BHZ, US_HLID:00BHZ, US_MSO:00BHZ, US_NEW:00BHZ, CN_SHB:HHZ, US_NLWA:00BHZ")
-
+             default="US_HLID:00BHZ, US_NEW:00BHZ, US_NLWA:00BHZ, CN_SHB:HHZ, IU_COR:00BHZ, US_MSO:00BHZ")
     # Real-time parameters
     parser.add_argument(
         '--seedlink_server', type=str,
@@ -533,8 +536,12 @@ def main():
                         action="store_true", dest="verbose",
                         help='show verbose debugging output')
     # parse the arguments
+    
     args = parser.parse_args()
-
+    global XOUTS
+    XOUTS = [0] * len(args.seedlink_streams.split(','))
+    global idx 
+    idx = 0
     if args.verbose:
         loglevel = logging.DEBUG
     else:
