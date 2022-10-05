@@ -17,7 +17,7 @@ An example is `python3 LLO_picket_fence.py -s "US_KVTX:10BHZ, IU_HKT:00BHZ, IU_T
 
 All the parameters also have defaults which I have personally chosen as good fits so `python3 LLO_picket_fence.py` as it is, with none of the extra optional parameters set, will run with the default parameters I have chosen.
 
-If you would like the minimum y-axis to be the threshold (default 500 nm/s), then you need to get the waveform.py file from obspy and make the following changes (this is purely for aesthetic reasons, the code will run as it should without this being done). I would recommend doing so solely because it forces each y-axis to have the same range so you can view the signals relative to each other.
+If you would like the minimum y-axis to be the threshold (default 500 nm/s), then you need to get the waveform.py file from obspy and make the following changes (this is purely for aesthetic reasons, the code will run as it should without this being done). I would recommend doing so solely because it forces each y-axis to have the same range so you can view the signals relative to the threshold.
 
 If you would like the aesthetics mentioned above, do the following:
 
