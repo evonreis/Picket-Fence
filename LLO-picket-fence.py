@@ -42,6 +42,7 @@ import warnings
 import sys
 from scipy import signal
 
+
 try:
     # Py3
     from urllib.request import URLError
@@ -218,21 +219,16 @@ class SeedlinkPlotter(tkinter.Tk):
             Filter=(num,den)
             counter = 0
             for trace in stream:
+                global idx, XOUTS
                 dt = trace.stats.delta
                 totalDuration = len(trace.data) * dt
                 T=np.arange(0.0, totalDuration, dt)
                 trace.data -= np.mean(trace.data)
-# =============================================================================
-#                 if counter % 5 == 0:
-#                     pre = trace[100]
-# =============================================================================
-                tout, yout, xout=signal.lsim(Filter, trace.data,T)  ## use xout in future implementation
+                tout, yout, xout=signal.lsim(Filter, trace.data, T, X0=XOUTS[idx])  ## use xout in future implementation
+                XOUTS[idx] = xout[-1]
+                idx = (idx + 1) % len(stream)
                 trace.data = yout
-# =============================================================================
-#                 if counter % 5 == 0:
-#                     print(f"Before: {pre}                       After: {trace[100]}")
-#                 counter += 1
-# =============================================================================
+    
             threshold = self.threshold # 500 nm/s normally, can be changed in the parameters
             index_list = []
             for trace in stream:
@@ -540,8 +536,12 @@ def main():
                         action="store_true", dest="verbose",
                         help='show verbose debugging output')
     # parse the arguments
+    
     args = parser.parse_args()
-
+    global XOUTS
+    XOUTS = [0] * len(args.seedlink_streams.split(','))
+    global idx 
+    idx = 0
     if args.verbose:
         loglevel = logging.DEBUG
     else:
