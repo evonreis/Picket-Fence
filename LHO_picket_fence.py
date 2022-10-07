@@ -37,7 +37,6 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import threading
 from time import sleep
-import warnings
 
 import sys
 from scipy import signal
@@ -74,7 +73,7 @@ if OBSPY_VERSION < [0, 10]:
         "https://github.com/bonaime/seedlink_plotter/issues/7).")
     warnings.warn(warning_msg)
 # Check if OBSPY_VERSION < 0.11
-if OBSPY_VERSION < [0, 11]: # ligo-5 has OBSPY_VERSION equal to [1, 2] (Isaac)
+if OBSPY_VERSION < [0, 11]: 
     # 0.10.x
     from obspy.seedlink.slpacket import SLPacket
     from obspy.seedlink.slclient import SLClient
@@ -542,6 +541,21 @@ def main():
     XOUTS = [0] * len(args.seedlink_streams.split(','))
     global idx 
     idx = 0
+    if args.lookback > 420:
+        args.lookback = 420
+        print("Lookback time too large. Lookback set to 7 minutes to avoid wait-time.")
+    if args.backtrace_time <= args.lookback:
+        args.backtrace_time = args.lookback + 420
+        print("Backtrace_time is smaller than lookback. Backtrace_time set to lookback plus 7 minutes.")
+    if args.backtrace_time <= 0:
+        args.backtrace_time = 900
+        print("Backtrace_time must be positive. Backtrace_time set to 15 minutes.")
+    if args.update_time <= 0:
+        args.update_time = 2
+        print("Update_time must be positive. Update_time set to 2 seconds.")
+    if args.threshold <= 0:
+        args.threshold = 200
+        print("Threshold must be positive. Threshold set to 200.")
     if args.verbose:
         loglevel = logging.DEBUG
     else:
