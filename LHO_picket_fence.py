@@ -482,7 +482,7 @@ def main():
              'in "NETWORK"_"STATION" format and "selector" a space separated '
              'list of "LOCATION""CHANNEL", e.g. '
              '"IU_KONO:BHE BHN,MN_AQU:HH?.D".', 
-             default="US_HLID:00BHZ, US_NEW:00BHZ, US_NLWA:00BHZ, CN_SHB:HHZ, IU_COR:00BHZ, US_MSO:00BHZ")
+             default="US_HLID:00BHZ, US_NEW:00BHZ, US_NLWA:00BHZ, CN_VDEB:HHZ, UO_FHAC:HHZ, US_MSO:00BHZ")
     # Real-time parameters
     parser.add_argument(
         '--seedlink_server', type=str,
