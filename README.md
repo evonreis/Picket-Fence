@@ -9,7 +9,7 @@ INSTALLATION:
 
 First, start off with downloading conda which will make the rest of the installation much easier. It can be downloaded here https://conda.io/projects/conda/en/latest/user-guide/install/index.html and should only take a few minutes. Once conda is installed, we must download obspy, matplotlib, numpy, and scipy which can be downloaded with the commands `conda install -c conda-forge obspy`, `conda install -c conda-forge matplotlib`, `conda install -c conda-forge numpy`, and `conda install -c conda-forge scipy`.
 
-Now that all dependencies are downloaded, to download the specific file, go to the file and click "Raw", then right click anywhere on the page and click "Save page as..." and save the file in whichever directory you see fit. 
+Now that all dependencies are downloaded, to download the Picket-Fence files, open a terminal, enter the directory you would like the files to be located at, and finally use ```git clone https://github.com/IAguilar007/Picket-Fence```. Whenever an update drops, we can use ```git pull https://github.com/IAguilar007/Picket-Fence``` should work.
 ___________
 
 RUNNING THE PROGRAM:
