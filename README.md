@@ -7,9 +7,9 @@ ___________
 
 INSTALLATION:
 
-First, start off with downloading conda which will make the rest of the installation much easier. It can be downloaded here https://conda.io/projects/conda/en/latest/user-guide/install/index.html and should only take a few minutes. Once conda is installed, we must download obspy, matplotlib, numpy, and scipy which can be downloaded with the commands `conda install -c conda-forge obspy`, `conda install -c conda-forge matplotlib`, `conda install -c conda-forge numpy`, and `conda install -c conda-forge scipy`.
+First, start off with downloading conda which will make the rest of the installation much easier. It can be downloaded here https://conda.io/projects/conda/en/latest/user-guide/install/index.html and should only take a few minutes. Once conda is installed, we must download obspy, matplotlib, numpy, and scipy which can be downloaded with the commands `conda install -c conda-forge obspy`, `conda install -c conda-forge matplotlib`, `conda install -c conda-forge numpy`, and `conda install -c conda-forge scipy`. For LLO, the audio cue requires playsound to be downloaded, which in turn requires pip. To download pip with conda, use `conda install pip` and to use pip to download playsound, use `pip install playsound`.
 
-Now that all dependencies are downloaded, to download the Picket-Fence files, open a terminal, enter the directory you would like the files to be located at, and finally use ```git clone https://github.com/IAguilar007/Picket-Fence```. Whenever an update drops, we can use ```git pull https://github.com/IAguilar007/Picket-Fence``` should work.
+Now that all dependencies are downloaded, to download the Picket-Fence files, open a terminal, enter the directory you would like the files to be located at, and finally use `git clone https://github.com/IAguilar007/Picket-Fence`. Whenever an update drops, we can use `git pull https://github.com/IAguilar007/Picket-Fence` should work.
 ___________
 
 RUNNING THE PROGRAM:
