@@ -40,7 +40,7 @@ from time import sleep
 
 import sys
 from scipy import signal
-
+from playsound import playsound
 
 try:
     # Py3
@@ -246,7 +246,8 @@ class SeedlinkPlotter(tkinter.Tk):
                 for j in range(-1, -int(looking), -1):
                     if trace.data[j] > threshold:
                         counter += 1
-                        index_list.append(trace) #If threshold is surpassed within the lookback time,
+                        if trace not in index_list:
+                            index_list.append(trace) #If threshold is surpassed within the lookback time,
                         #put the trace ID in a list to pass to the plot_lines function
             stream.trim(starttime=self.start_time, endtime=self.stop_time)
             np.set_printoptions(threshold=np.inf)
@@ -343,11 +344,22 @@ class SeedlinkPlotter(tkinter.Tk):
             bbox["alpha"] = 0.6
         fig.text(0.99, 0.97, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
                  ha="right", va="top", bbox=bbox, fontsize="medium")
+        index_size = len(index_list)
         for red_trace in index_list:  ## traces are passed threshold
             for j in range(len(stream)): ## obtaining its position in the stream
                 if red_trace == stream[j]:
-                    fig.axes[j].set_facecolor('r') #Plots that surpass the threshold within the lookback time
-                                                        #turn red
+                    fig.axes[j].set_facecolor('r') #Plots that surpass the threshold within the lookback time #turn red
+                    global alert_range
+                    global ring_counter
+                    if alert_rang == False:
+                        if ring_counter > (15 * index_size):
+                            alert_rang = True
+                            ring_counter = 0
+                        if ring_counter % index_size == 0:
+                            playsound('beep-08b.wav', block=False)
+                        ring_counter += 1
+        if index_size == 0:
+            alert_rang = False
         fig.canvas.draw()
 
 
@@ -561,7 +573,10 @@ def main():
     else:
         loglevel = logging.CRITICAL
     logging.basicConfig(level=loglevel)
-
+    global alert_rang
+    alert_rang = False
+    global ring_counter
+    ring_counter = 0
     now = UTCDateTime()
     stream = Stream()
     events = Catalog()
