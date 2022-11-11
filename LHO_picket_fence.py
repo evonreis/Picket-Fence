@@ -246,7 +246,8 @@ class SeedlinkPlotter(tkinter.Tk):
                 for j in range(-1, -int(looking), -1):
                     if trace.data[j] > threshold:
                         counter += 1
-                        index_list.append(trace) #If threshold is surpassed within the lookback time,
+                        if trace not in index_list:
+                            index_list.append(trace) #If threshold is surpassed within the lookback time,
                         #put the trace ID in a list to pass to the plot_lines function
             stream.trim(starttime=self.start_time, endtime=self.stop_time)
             np.set_printoptions(threshold=np.inf)
