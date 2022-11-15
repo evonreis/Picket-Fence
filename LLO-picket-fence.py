@@ -349,7 +349,7 @@ class SeedlinkPlotter(tkinter.Tk):
             for j in range(len(stream)): ## obtaining its position in the stream
                 if red_trace == stream[j]:
                     fig.axes[j].set_facecolor('r') #Plots that surpass the threshold within the lookback time #turn red
-                    global alert_range
+                    global alert_rang
                     global ring_counter
                     if alert_rang == False:
                         if ring_counter > (15 * index_size):
