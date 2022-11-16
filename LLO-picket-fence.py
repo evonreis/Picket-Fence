@@ -352,7 +352,7 @@ class SeedlinkPlotter(tkinter.Tk):
                     global alert_rang
                     global ring_counter
                     if alert_rang == False:
-                        if ring_counter > (15 * index_size):
+                        if ring_counter > (4 * index_size):
                             alert_rang = True
                             ring_counter = 0
                         if ring_counter % index_size == 0:
@@ -495,7 +495,8 @@ def main():
              'list of "LOCATION""CHANNEL", e.g. '
              '"IU_KONO:BHE BHN,MN_AQU:HH?.D".', 
              default="US_KVTX:10BHZ, IU_HKT:00BHZ, IU_TEIG:00BHZ, US_MIAR:00BHZ, US_LRAL:00BHZ, IU_DWPF:00BHZ")
-    # Real-time parameters
+    # Real-time parametersm obspy import __version__ as OBSPY_VERSION
+    
     parser.add_argument(
         '--seedlink_server', type=str,
                         help='the seedlink server to connect to with port. "\
