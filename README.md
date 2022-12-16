@@ -14,7 +14,7 @@ ___________
 
 RUNNING THE PROGRAM:
 
-To run, just open a terminal, go to the directory where you stored the file, and enter the command `python3 LLO_picket_fence.py` or `python3 LHO_picket_fence.py` depending on the file you downloaded. This will run the program with the optional parameters already chosen by me (the optional parameters I have set are good fits). When an earthquake that crosses our preset threshold occurs, the background for the plot of the station measuring the earthquake will turn a bright red. If a station is not being plotted, this is because it is currently down/ not feeding us data.
+To run, just open a terminal, go to the directory where you stored the file, and enter the command `python3 LLO_picket_fence.py` or `python3 LHO_picket_fence.py` depending on the file you downloaded. Please run `python3 LLO-Server.py` before running the LLO Picket Fence due to the addition of EPICs variables to the code. This will run the program with the optional parameters already chosen by me (the optional parameters I have set are good fits). When an earthquake that crosses our preset threshold occurs, the background for the plot of the station measuring the earthquake will turn a bright red. If a station is not being plotted, this is because it is currently down/ not feeding us data.
 
 For any questions, you may email me at isaac007@stanford.edu and please make the subject involve Picket-Fence.
 
