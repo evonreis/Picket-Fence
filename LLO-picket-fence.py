@@ -37,7 +37,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import threading
 from time import sleep
-
+import subprocess
 import sys
 from scipy import signal
 from playsound import playsound
@@ -50,6 +50,14 @@ except ImportError:
     from urllib2 import URLError
 import logging
 import numpy as np
+
+LLO = {"LRAL" : (33.0399, -86.9978), "MIAR" : (34.5454, -93.5765),
+       "TEIG" : (20.226, -88.276), "HKT" : (29.965, -95.838),
+       "DWPF" : (28.11, -81.433), "KVTX" : (27.546, -97.893)}
+
+indicies = {"LRAL" : 1, "MIAR" : 2,
+            "TEIG" : 3, "HKT" : 4,
+            "DWPF" : 5, "KVTX" : 6}
 
 # ugly but simple Python 2/3 compat
 if sys.version_info.major < 3:
@@ -244,11 +252,12 @@ class SeedlinkPlotter(tkinter.Tk):
                 trace.data[0:flat_len] = flat_start[0:flat_len]
                 counter = 0
                 for j in range(-1, -int(looking), -1):
-                    if trace.data[j] > threshold:
+                    if abs(trace.data[j]) > threshold:
                         counter += 1
                         if trace not in index_list:
                             index_list.append(trace) #If threshold is surpassed within the lookback time,
                         #put the trace ID in a list to pass to the plot_lines function
+                    break
             stream.trim(starttime=self.start_time, endtime=self.stop_time)
             np.set_printoptions(threshold=np.inf)
             self.plot_lines(stream, index_list)
@@ -274,7 +283,7 @@ class SeedlinkPlotter(tkinter.Tk):
         # single traces of one id together.
         for trace in stream:
             trace.stats.processing = []
-
+        
         for trace in stream:  ## don't plot traces with no data
             if len(trace.data) in [2, 4]:
                 stream.remove(trace)
@@ -344,6 +353,30 @@ class SeedlinkPlotter(tkinter.Tk):
             bbox["alpha"] = 0.6
         fig.text(0.99, 0.97, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
                  ha="right", va="top", bbox=bbox, fontsize="medium")
+        
+        idx = -1
+        max_val = 0
+        for i in range(len(stream)):
+            trace = stream[i]
+            cur_data = trace.data[-trace.stats.numsamples:]
+            mn = min(cur_data)
+            mx = max(cur_data)
+            best = mn if abs(mn) > abs(mx) else mx
+            if abs(max_val) < abs(best):
+                idx = i
+                max_val = abs(best)
+        
+        subprocess.run(["caput", "L1:ISI-USGS_NETWORK_PEAK", f"{max_val}"], capture_output=True)
+        subprocess.run(["caput", "L1:ISI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], capture_output=True)
+        
+        for trace in stream:
+            i = indicies[trace.stats.station]
+            starter = f"L1:ISI-USGS_STATION_0{i}_" if i < 10 else f"STATION_{i}_"
+            cur_data = trace.data[-trace.stats.numsamples:]
+            subprocess.run(["caput", starter + "MIN", f"{np.min(cur_data)}"], capture_output=True)  ## try different min method
+            subprocess.run(["caput", starter + "MAX", f"{np.max(cur_data)}"], capture_output=True)  ## try different max method
+            subprocess.run(["caput", starter + "MEAN", f"{np.mean(cur_data)}"], capture_output=True)  ## try different mean method
+            
         index_size = len(index_list)
         for red_trace in index_list:  ## traces are passed threshold
             for j in range(len(stream)): ## obtaining its position in the stream
@@ -482,6 +515,19 @@ def _parse_time_with_suffix_to_minutes(timestring):
     return seconds / 60.0
 
 
+def ID_Creator(s):
+    return int(''.join(str(format(ord(c), "x")) for c in s), 16)
+
+
+def Reverse_ID(n):
+    s = str(hex(n))
+    itr = len(s)
+    result = ""
+    for i in range(2, itr, 2):
+        result += chr(int(s[i:i+2], 16))
+    return result
+
+
 def main():
     parser = ArgumentParser(prog='seedlink_plotter',
                             description='Plot a realtime seismogram of a station',
@@ -578,6 +624,18 @@ def main():
     alert_rang = False
     global ring_counter
     ring_counter = 0
+    i = 1
+    pref = "L1:ISI-USGS_"
+    for stat in LLO:
+        starter = f"STATION_0{i}_" if i < 10 else f"STATION_{i}_"
+        subprocess.run(["caput", pref + starter + "LAT", f"{LLO[stat][0]}"], capture_output=True)
+        subprocess.run(["caput", pref + starter + "LON", f"{LLO[stat][1]}"], capture_output=True)
+        subprocess.run(["caput", pref + starter + "MIN", "-1"], capture_output=True)
+        subprocess.run(["caput", pref + starter + "MAX", "-1"], capture_output=True)
+        subprocess.run(["caput", pref + starter + "MEAN", "-1"], capture_output=True)
+        subprocess.run(["caput", pref + starter + "ID", f"{ID_Creator(stat)}"], capture_output=True)
+        i += 1
+        
     now = UTCDateTime()
     stream = Stream()
     events = Catalog()
