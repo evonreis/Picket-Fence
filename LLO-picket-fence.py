@@ -40,7 +40,6 @@ from time import sleep
 import subprocess
 import sys
 from scipy import signal
-from playsound import playsound
 
 try:
     # Py3
@@ -224,7 +223,6 @@ class SeedlinkPlotter(tkinter.Tk):
             den=[1.0000, 9.8339, 58.7394, 205.0490, 463.7573, 745.4739, 577.9041, 455.8890, 180.6478, 70.4068, 6.7771]
             num=[0, 0.4726, 0.8729, 20.9160, 16.5661, 138.8009, 43.0143, 170.2868, 19.9511, 52.9649, 0]
             Filter=(num,den)
-            counter = 0
             for trace in stream:
                 global idx, XOUTS
                 dt = trace.stats.delta
@@ -237,7 +235,9 @@ class SeedlinkPlotter(tkinter.Tk):
                 trace.data = yout
     
             threshold = self.threshold # 500 nm/s normally, can be changed in the parameters
-            index_list = []
+            red_list = []
+            orange_list = []
+            yellow_list = []
             for trace in stream:
                 trace_len = len(trace.data)
                 looking = int(trace.stats.sampling_rate * self.lookback) # How far back to look for
@@ -250,17 +250,22 @@ class SeedlinkPlotter(tkinter.Tk):
                 for j in range(flat_len):
                     flat_start[j] = mean_val # Make array the mean value instead of 0 to keep the intereface from zooming in too far
                 trace.data[0:flat_len] = flat_start[0:flat_len]
-                counter = 0
-                for j in range(-1, -int(looking), -1):
-                    if abs(trace.data[j]) > threshold:
-                        counter += 1
-                        if trace not in index_list:
-                            index_list.append(trace) #If threshold is surpassed within the lookback time,
-                        #put the trace ID in a list to pass to the plot_lines function
-                    break
+                max_val = max(max(trace.data[-int(looking):]), -min(trace.data[-int(looking):]))
+                if max_val > 10*threshold:
+                    if trace not in red_list:
+                        red_list.append(trace)
+                elif max_val > 2*threshold:
+                    if trace not in orange_list:
+                        orange_list.append(trace)
+                elif max_val > threshold:
+                    if trace not in yellow_list:
+                        yellow_list.append(trace)
+                else:
+                    continue
+                
             stream.trim(starttime=self.start_time, endtime=self.stop_time)
             np.set_printoptions(threshold=np.inf)
-            self.plot_lines(stream, index_list)
+            self.plot_lines(stream, red_list, orange_list, yellow_list)
 
         except Exception as e:
             logging.error(e)
@@ -268,7 +273,7 @@ class SeedlinkPlotter(tkinter.Tk):
 
         self.after(int(self.args.update_time * 1000), self.plot_graph)
 
-    def plot_lines(self, stream, index_list):
+    def plot_lines(self, stream, red_list, orange_list, yellow_list):
         for id_ in self.ids:
             if not any([tr.id == id_ for tr in stream]):
                 net, sta, loc, cha = id_.split(".")
@@ -353,6 +358,15 @@ class SeedlinkPlotter(tkinter.Tk):
             bbox["alpha"] = 0.6
         fig.text(0.99, 0.97, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
                  ha="right", va="top", bbox=bbox, fontsize="medium")
+        for j in range(len(stream)):
+            if stream[j] in red_list:
+                fig.axes[j].set_facecolor("#FF2929") 
+            elif stream[j] in orange_list:
+                fig.axes[j].set_facecolor("orange")
+            elif stream[j] in yellow_list:
+                fig.axes[j].set_facecolor("yellow")
+            else:
+                fig.axes[j].set_facecolor("#D3D3D3")
         
         idx = -1
         max_val = 0
@@ -377,22 +391,6 @@ class SeedlinkPlotter(tkinter.Tk):
             subprocess.run(["caput", starter + "MAX", f"{np.max(cur_data)}"], capture_output=True)  ## try different max method
             subprocess.run(["caput", starter + "MEAN", f"{np.mean(cur_data)}"], capture_output=True)  ## try different mean method
             
-        index_size = len(index_list)
-        for red_trace in index_list:  ## traces are passed threshold
-            for j in range(len(stream)): ## obtaining its position in the stream
-                if red_trace == stream[j]:
-                    fig.axes[j].set_facecolor('r') #Plots that surpass the threshold within the lookback time #turn red
-                    global alert_rang
-                    global ring_counter
-                    if alert_rang == False:
-                        if ring_counter > (4 * index_size):
-                            alert_rang = True
-                            ring_counter = 0
-                        if ring_counter % index_size == 0:
-                            playsound('beep-08b.wav', block=False)
-                        ring_counter += 1
-        if index_size == 0:
-            alert_rang = False
         fig.canvas.draw()
 
 
@@ -540,7 +538,7 @@ def main():
              'in "NETWORK"_"STATION" format and "selector" a space separated '
              'list of "LOCATION""CHANNEL", e.g. '
              '"IU_KONO:BHE BHN,MN_AQU:HH?.D".', 
-             default="US_KVTX:10BHZ, IU_HKT:00BHZ, IU_TEIG:00BHZ, US_MIAR:00BHZ, US_LRAL:00BHZ, IU_DWPF:00BHZ")
+             default="US_LRAL:00BHZ, US_MIAR:00BHZ, IU_TEIG:00BHZ, IU_HKT:00BHZ, US_KVTX:10BHZ, IU_DWPF:00BHZ")
     # Real-time parametersm obspy import __version__ as OBSPY_VERSION
     
     parser.add_argument(
@@ -620,10 +618,7 @@ def main():
     else:
         loglevel = logging.CRITICAL
     logging.basicConfig(level=loglevel)
-    global alert_rang
-    alert_rang = False
-    global ring_counter
-    ring_counter = 0
+    
     i = 1
     pref = "L1:ISI-USGS_"
     for stat in LLO:
