@@ -194,7 +194,6 @@ class SeedlinkPlotter(tkinter.Tk):
                 raise Exception("Empty stream for plotting")
 
             stream.merge(-1)
-
             for trace in stream:
                 trace_len = len(trace.data)
                 flat_len = int(trace_len / 3) # Make first third of data the mean value to removethe startup transient
@@ -211,47 +210,57 @@ class SeedlinkPlotter(tkinter.Tk):
                                             # seconds to be impacted
                     hwp = np.append(hw, new)
                     trace.data = trace.data * hwp # Apply window
-
             # about to filter the data using Brian's Lowpass filter
             den=[1.0000, 9.8339, 58.7394, 205.0490, 463.7573, 745.4739, 577.9041, 455.8890, 180.6478, 70.4068, 6.7771]
             num=[0, 0.4726, 0.8729, 20.9160, 16.5661, 138.8009, 43.0143, 170.2868, 19.9511, 52.9649, 0]
             Filter=(num,den)
-            counter = 0
             for trace in stream:
-                global idx, XOUTS
+                # global idx, XOUTS
                 dt = trace.stats.delta
                 totalDuration = len(trace.data) * dt
                 T=np.arange(0.0, totalDuration, dt)
                 trace.data -= np.mean(trace.data)
-                tout, yout, xout=signal.lsim(Filter, trace.data, T, X0=XOUTS[idx])  ## use xout in future implementation
-                XOUTS[idx] = xout[-1]
-                idx = (idx + 1) % len(stream)
+                tout, yout, xout = signal.lsim(Filter, trace.data, T, X0=None) #, X0=XOUTS[idx])  ## use xout in future implementation
+                #XOUTS[idx] = xout[-1]
+                #idx = (idx + 1) % len(stream)
                 trace.data = yout
-    
             threshold = self.threshold # 500 nm/s normally, can be changed in the parameters
-            index_list = []
+            red_list = []
+            orange_list = []
+            yellow_list = []
+            i = 0
             for trace in stream:
                 trace_len = len(trace.data)
                 looking = int(trace.stats.sampling_rate * self.lookback) # How far back to look for
                 # earthquakes, any earthquakes above the threshold within this time will trigger the warning
-                if looking > trace_len:
-                    raise ValueError("Lookback too far, not enough data")
+# =============================================================================
+#                 if looking > trace_len:
+#                     raise ValueError("Lookback too far, not enough data")
+# =============================================================================
                 flat_len = int(trace_len / 3) # Length of flattening (1st third by default)
                 mean_val = np.mean(trace.data[trace_len // 2:]) # Get the mean value
                 flat_start = np.zeros(trace_len) # Make the array
                 for j in range(flat_len):
                     flat_start[j] = mean_val # Make array the mean value instead of 0 to keep the intereface from zooming in too far
                 trace.data[0:flat_len] = flat_start[0:flat_len]
-                counter = 0
-                for j in range(-1, -int(looking), -1):
-                    if trace.data[j] > threshold:
-                        counter += 1
-                        if trace not in index_list:
-                            index_list.append(trace) #If threshold is surpassed within the lookback time,
-                        #put the trace ID in a list to pass to the plot_lines function
+                
+                max_val = max(max(trace.data[-int(looking):]), -min(trace.data[-int(looking):]))
+                i += 1
+                ## max_val = max(max(trace.data), -min(trace.data))
+                if max_val > 10*threshold:  ## FIX THESE VALUES TO BE RATIOS OF THRESHOLD
+                    if trace not in red_list:
+                        red_list.append(trace)
+                elif max_val > 2*threshold:
+                    if trace not in orange_list:
+                        orange_list.append(trace)
+                elif max_val > threshold:
+                    if trace not in yellow_list:
+                        yellow_list.append(trace)
+                else:
+                    continue
             stream.trim(starttime=self.start_time, endtime=self.stop_time)
             np.set_printoptions(threshold=np.inf)
-            self.plot_lines(stream, index_list)
+            self.plot_lines(stream, red_list, orange_list, yellow_list)
 
         except Exception as e:
             logging.error(e)
@@ -259,7 +268,7 @@ class SeedlinkPlotter(tkinter.Tk):
 
         self.after(int(self.args.update_time * 1000), self.plot_graph)
 
-    def plot_lines(self, stream, index_list):
+    def plot_lines(self, stream, red_list, orange_list, yellow_list):
         for id_ in self.ids:
             if not any([tr.id == id_ for tr in stream]):
                 net, sta, loc, cha = id_.split(".")
@@ -278,7 +287,6 @@ class SeedlinkPlotter(tkinter.Tk):
         for trace in stream:  ## don't plot traces with no data
             if len(trace.data) in [2, 4]:
                 stream.remove(trace)
-        
         # Change equal_scale to False if auto-scaling should be turned off
         stream.plot(fig=fig, method="fast", draw=False, equal_scale=True,
                     size=(self.args.x_size, self.args.y_size), title="",
@@ -344,11 +352,15 @@ class SeedlinkPlotter(tkinter.Tk):
             bbox["alpha"] = 0.6
         fig.text(0.99, 0.97, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
                  ha="right", va="top", bbox=bbox, fontsize="medium")
-        for red_trace in index_list:  ## traces are passed threshold
-            for j in range(len(stream)): ## obtaining its position in the stream
-                if red_trace == stream[j]:
-                    fig.axes[j].set_facecolor('r') #Plots that surpass the threshold within the lookback time
-                                                        #turn red
+        for j in range(len(stream)):
+            if stream[j] in red_list:
+                fig.axes[j].set_facecolor("#FF2929") 
+            elif stream[j] in orange_list:
+                fig.axes[j].set_facecolor("orange")
+            elif stream[j] in yellow_list:
+                fig.axes[j].set_facecolor("yellow")
+            else:
+                fig.axes[j].set_facecolor("#D3D3D3")
         fig.canvas.draw()
 
 
@@ -483,7 +495,7 @@ def main():
              'in "NETWORK"_"STATION" format and "selector" a space separated '
              'list of "LOCATION""CHANNEL", e.g. '
              '"IU_KONO:BHE BHN,MN_AQU:HH?.D".', 
-             default="US_HLID:00BHZ, US_NEW:00BHZ, US_NLWA:00BHZ, CN_VDEB:HHZ, UO_TOOM:HHZ, US_MSO:00BHZ")
+             default="CN_VDEB:HHZ, US_HLID:00BHZ, US_NEW:00BHZ, US_NLWA:00BHZ, UO_TOOM:HHZ, US_MSO:00BHZ") ## CN_VDEB:HHZ, 
     # Real-time parameters
     parser.add_argument(
         '--seedlink_server', type=str,
@@ -518,7 +530,7 @@ def main():
     parser.add_argument(
         '--threshold', type=int, help='maximum ground speed', required=False, default=500)
     parser.add_argument(
-        '--lookback', type=int, help='how far back IN SECONDS (integer) the plotter checks for earthquakes', required=False, default=360)
+        '--lookback', type=int, help='how far back IN SECONDS (integer) the plotter checks for earthquakes', required=False, default=40)
 
     parser.add_argument(
         '--line_plot', help='regular real time plot for single station', required=False, action='store_true')
@@ -538,13 +550,15 @@ def main():
     # parse the arguments
     
     args = parser.parse_args()
-    global XOUTS
-    XOUTS = [0] * len(args.seedlink_streams.split(','))
-    global idx 
-    idx = 0
-    if args.lookback > 420:
-        args.lookback = 420
-        print("Lookback time too large. Lookback set to 7 minutes to avoid wait-time.")
+    #global XOUTS
+    #XOUTS = [0] * len(args.seedlink_streams.split(','))
+    #global idx 
+    #idx = 0
+# =============================================================================
+#     if args.lookback > 420:
+#         args.lookback = 420
+#         print("Lookback time too large. Lookback set to 7 minutes to avoid wait-time.")
+# =============================================================================
     if args.backtrace_time <= args.lookback:
         args.backtrace_time = args.lookback + 420
         print("Backtrace_time is smaller than lookback. Backtrace_time set to lookback plus 7 minutes.")
