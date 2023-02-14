@@ -18,13 +18,17 @@ def func(n):  ## creates all our EPIC variables
         dic[starter + "MIN"] = {'type' : 'int'}  ## min value of station
         dic[starter + "MAX"] = {'type' : 'int'}  ## max value of station
         dic[starter + "MEAN"] = {'type' : 'int'}  ## mean value of station
-        dic[starter + "ID"] = {'type' : "int"}  ## hex value of string
+        dic[starter + "ID"] = {'type' : 'int'}  ## hex value of string
+        dic[starter + "NAME"] = {'type' : 'str'}  ## string version of ID
         dicts.append(dic)
     dic = {}
     dic["NETWORK_PEAK"] = {'type' : 'int'}  ## max absolute value from all stations
     dicts.append(dic)
     dic = {}
     dic["NETWORK_STATION_NUM"] = {'type' : 'int'}  ## which station the max came from
+    dicts.append(dic)
+    dic = {}
+    dic["NETWORK_STATION_NAME"] = {'type' : 'str'}  ## which station the max came from
     dicts.append(dic)
     dic = {}
     dic["NETWORK_AUX1"] = {'type' : 'int'}
@@ -69,6 +73,7 @@ def main():
     driver.setParam("NETWORK_AUX1", -1)
     driver.setParam("NETWORK_AUX2", -1)
     driver.setParam("NETWORK_AUX3", -1)
+    driver.setParam("NETWORK_STATION_NAME", "")
     
     # process CA transactions
     while True:
