@@ -52,11 +52,11 @@ import numpy as np
 
 LLO = {"LRAL" : (33.0399, -86.9978), "MIAR" : (34.5454, -93.5765),
        "TEIG" : (20.226, -88.276), "HKT" : (29.965, -95.838),
-       "DWPF" : (28.11, -81.433), "KVTX" : (27.546, -97.893)}
+       "DWPF" : (28.11, -81.433)}
 
 indicies = {"LRAL" : 1, "MIAR" : 2,
             "TEIG" : 3, "HKT" : 4,
-            "DWPF" : 5, "KVTX" : 6}
+            "DWPF" : 5}
 
 # ugly but simple Python 2/3 compat
 if sys.version_info.major < 3:
@@ -224,14 +224,11 @@ class SeedlinkPlotter(tkinter.Tk):
             num=[0, 0.4726, 0.8729, 20.9160, 16.5661, 138.8009, 43.0143, 170.2868, 19.9511, 52.9649, 0]
             Filter=(num,den)
             for trace in stream:
-                global idx, XOUTS
                 dt = trace.stats.delta
                 totalDuration = len(trace.data) * dt
                 T=np.arange(0.0, totalDuration, dt)
                 trace.data -= np.mean(trace.data)
-                tout, yout, xout=signal.lsim(Filter, trace.data, T, X0=XOUTS[idx])  ## use xout in future implementation
-                XOUTS[idx] = xout[-1]
-                idx = (idx + 1) % len(stream)
+                tout, yout, _ =signal.lsim(Filter, trace.data, T, X0=None)
                 trace.data = yout
     
             threshold = self.threshold # 500 nm/s normally, can be changed in the parameters
@@ -349,8 +346,6 @@ class SeedlinkPlotter(tkinter.Tk):
                 if len(ydata) in [4, 2] and not ydata.any():  ## this is useless now
                     if MATPLOTLIB_VERSION[0] >= 2:
                         ax.set_facecolor("k") #Traces with no data turn black
-                    else:
-                        ax.set_axis_bgcolor("#ff6666")
         if OBSPY_VERSION >= [0, 10]:
             fig.axes[0].set_xlim(right=date2num(self.stop_time.datetime))
             fig.axes[0].set_xlim(left=date2num(self.start_time.datetime))
@@ -380,17 +375,18 @@ class SeedlinkPlotter(tkinter.Tk):
                 idx = i
                 max_val = abs(best)
         
-        subprocess.run(["caput", "L1:ISI-USGS_NETWORK_PEAK", f"{max_val}"], capture_output=True)
-        subprocess.run(["caput", "L1:ISI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], capture_output=True)
+        subprocess.Popen(["caput", "L1:ISI-USGS_NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", "L1:ISI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", "L1:ISI-USGS_NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         for trace in stream:
             i = indicies[trace.stats.station]
             starter = f"L1:ISI-USGS_STATION_0{i}_" if i < 10 else f"STATION_{i}_"
             cur_data = trace.data[-trace.stats.numsamples:]
-            subprocess.run(["caput", starter + "MIN", f"{np.min(cur_data)}"], capture_output=True)  ## try different min method
-            subprocess.run(["caput", starter + "MAX", f"{np.max(cur_data)}"], capture_output=True)  ## try different max method
-            subprocess.run(["caput", starter + "MEAN", f"{np.mean(cur_data)}"], capture_output=True)  ## try different mean method
-            
+            subprocess.Popen(["caput", starter + "MIN", f"{np.min(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
+            subprocess.Popen(["caput", starter + "MAX", f"{np.max(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
+            subprocess.Popen(["caput", starter + "MEAN", f"{np.mean(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different mean method
+        
         fig.canvas.draw()
 
 
@@ -538,7 +534,7 @@ def main():
              'in "NETWORK"_"STATION" format and "selector" a space separated '
              'list of "LOCATION""CHANNEL", e.g. '
              '"IU_KONO:BHE BHN,MN_AQU:HH?.D".', 
-             default="US_LRAL:00BHZ, US_MIAR:00BHZ, IU_TEIG:00BHZ, IU_HKT:00BHZ, US_KVTX:10BHZ, IU_DWPF:00BHZ")
+             default="US_LRAL:00BHZ, US_MIAR:00BHZ, IU_TEIG:00BHZ, IU_HKT:00BHZ, IU_DWPF:00BHZ")
     # Real-time parametersm obspy import __version__ as OBSPY_VERSION
     
     parser.add_argument(
@@ -574,7 +570,7 @@ def main():
     parser.add_argument(
         '--threshold', type=int, help='maximum ground speed', required=False, default=500)
     parser.add_argument(
-        '--lookback', type=int, help='how far back IN SECONDS (integer) the plotter checks for earthquakes', required=False, default=360)
+        '--lookback', type=int, help='how far back IN SECONDS (integer) the plotter checks for earthquakes', required=False, default=40)
 
     parser.add_argument(
         '--line_plot', help='regular real time plot for single station', required=False, action='store_true')
@@ -594,10 +590,6 @@ def main():
     # parse the arguments
     
     args = parser.parse_args()
-    global XOUTS
-    XOUTS = [0] * len(args.seedlink_streams.split(','))
-    global idx 
-    idx = 0
     if args.lookback > 420:
         args.lookback = 420
         print("Lookback time too large. Lookback set to 7 minutes to avoid wait-time.")
@@ -623,12 +615,13 @@ def main():
     pref = "L1:ISI-USGS_"
     for stat in LLO:
         starter = f"STATION_0{i}_" if i < 10 else f"STATION_{i}_"
-        subprocess.run(["caput", pref + starter + "LAT", f"{LLO[stat][0]}"], capture_output=True)
-        subprocess.run(["caput", pref + starter + "LON", f"{LLO[stat][1]}"], capture_output=True)
-        subprocess.run(["caput", pref + starter + "MIN", "-1"], capture_output=True)
-        subprocess.run(["caput", pref + starter + "MAX", "-1"], capture_output=True)
-        subprocess.run(["caput", pref + starter + "MEAN", "-1"], capture_output=True)
-        subprocess.run(["caput", pref + starter + "ID", f"{ID_Creator(stat)}"], capture_output=True)
+        subprocess.Popen(["caput", pref + starter + "LAT", f"{LLO[stat][0]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", pref + starter + "LON", f"{LLO[stat][1]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", pref + starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", pref + starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", pref + starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", pref + starter + "ID", f"{ID_Creator(stat)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", pref + starter + "NAME", f"{stat}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         i += 1
         
     now = UTCDateTime()
