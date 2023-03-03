@@ -36,7 +36,9 @@ from obspy.core.util import MATPLOTLIB_VERSION
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import threading
+import os
 from time import sleep
+from datetime import datetime
 import subprocess
 import sys
 from scipy import signal
@@ -57,6 +59,8 @@ LLO = {"LRAL" : (33.0399, -86.9978), "MIAR" : (34.5454, -93.5765),
 indicies = {"LRAL" : 1, "MIAR" : 2,
             "TEIG" : 3, "HKT" : 4,
             "DWPF" : 5}
+
+POTENTIAL_GLITCHES = []
 
 # ugly but simple Python 2/3 compat
 if sys.version_info.major < 3:
@@ -80,7 +84,7 @@ if OBSPY_VERSION < [0, 10]:
         "https://github.com/bonaime/seedlink_plotter/issues/7).")
     warnings.warn(warning_msg)
 # Check if OBSPY_VERSION < 0.11
-if OBSPY_VERSION < [0, 11]: 
+if OBSPY_VERSION < [0, 11]:
     # 0.10.x
     from obspy.seedlink.slpacket import SLPacket
     from obspy.seedlink.slclient import SLClient
@@ -131,7 +135,7 @@ class SeedlinkPlotter(tkinter.Tk):
     This module plots realtime seismic data from a Seedlink server
     """
 
-    def __init__(self, stream=None, events=None, myargs=None, lock=None, 
+    def __init__(self, stream=None, events=None, myargs=None, lock=None,
                  trace_ids=None, *args, **kwargs):
         tkinter.Tk.__init__(self, *args, **kwargs)
         self.wm_title("seedlink-plotter {}".format(myargs.seedlink_server))
@@ -230,8 +234,9 @@ class SeedlinkPlotter(tkinter.Tk):
                 trace.data -= np.mean(trace.data)
                 tout, yout, _ =signal.lsim(Filter, trace.data, T, X0=None)
                 trace.data = yout
-    
+
             threshold = self.threshold # 500 nm/s normally, can be changed in the parameters
+            ## in this function, the color lists may have glitched traces in them. We want this
             red_list = []
             orange_list = []
             yellow_list = []
@@ -248,18 +253,27 @@ class SeedlinkPlotter(tkinter.Tk):
                     flat_start[j] = mean_val # Make array the mean value instead of 0 to keep the intereface from zooming in too far
                 trace.data[0:flat_len] = flat_start[0:flat_len]
                 max_val = max(max(trace.data[-int(looking):]), -min(trace.data[-int(looking):]))
-                if max_val > 10*threshold:
+                length = min(len(trace.data), trace.stats.sampling_rate * 60 * 15)  ## ensures at most 15 minutes of data
+                max_val_over_trace = max(max(trace.data[:length]), -min(trace.data[:length]))  ## grabs max over most recent 15 minutes
+                if max_val > 50000:  ## potential glitch
+                    if trace_get_name(trace) not in POTENTIAL_GLITCHES:
+                        POTENTIAL_GLITCHES.append(trace_get_name(trace))
+                elif max_val > 10*threshold:  ## should be red
                     if trace not in red_list:
                         red_list.append(trace)
-                elif max_val > 2*threshold:
+                elif max_val > 2*threshold:  ## should be orange
                     if trace not in orange_list:
                         orange_list.append(trace)
-                elif max_val > threshold:
+                elif max_val > threshold:  ## should be yellow
+                    if trace_get_name(trace) in POTENTIAL_GLITCHES:
+                        if max_val_over_trace < 2 * threshold:  ## potential glitch no longer glitching
+                            POTENTIAL_GLITCHES.remove(trace_get_name(trace))
                     if trace not in yellow_list:
                         yellow_list.append(trace)
-                else:
-                    continue
-                
+                else:  ## should be gray
+                    if trace_get_name(trace) in POTENTIAL_GLITCHES:
+                        if max_val_over_trace < 200:  ## potential glitch no longer glitching
+                            POTENTIAL_GLITCHES.remove(trace_get_name(trace))
             stream.trim(starttime=self.start_time, endtime=self.stop_time)
             np.set_printoptions(threshold=np.inf)
             self.plot_lines(stream, red_list, orange_list, yellow_list)
@@ -285,11 +299,23 @@ class SeedlinkPlotter(tkinter.Tk):
         # single traces of one id together.
         for trace in stream:
             trace.stats.processing = []
-        
-        for trace in stream:  ## don't plot traces with no data
+
+        for trace in stream:  ## don't plot traces with no data and don't display EPICs variables
             if len(trace.data) in [2, 4]:
                 stream.remove(trace)
-        
+                i = indicies[trace.stats.station]
+                starter = f"L1:SEI-USGS_STATION_0{i}_"
+                subprocess.Popen(["caput", starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if len(POTENTIAL_GLITCHES) == 1:  ## if station is glitching, dont display EPICs variables
+            trace_name = POTENTIAL_GLITCHES[0]
+            i = indicies[trace_name]
+            ## update AUX1 channel to hold picket number that is glitching
+            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_AUX1", f"{i}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif len(POTENTIAL_GLITCHES) > 1:  ## if multiple "glitches", they are probably not glitching (very large EQ??)
+            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            POTENTIAL_GLITCHES.clear() ## since they aren't glitching, remove them from list
         # Change equal_scale to False if auto-scaling should be turned off
         stream.plot(fig=fig, method="fast", draw=False, equal_scale=True,
                     size=(self.args.x_size, self.args.y_size), title="",
@@ -353,20 +379,39 @@ class SeedlinkPlotter(tkinter.Tk):
             bbox["alpha"] = 0.6
         fig.text(0.99, 0.97, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
                  ha="right", va="top", bbox=bbox, fontsize="medium")
+
+        ## update to remove glitches from red/orange/yellow lists
+        for trace_name in POTENTIAL_GLITCHES:
+            trace = name_get_trace(stream, trace_name)
+            if trace in red_list:
+                red_list.remove(trace)
+            elif trace in orange_list:
+                orange_list.remove(trace)
+            elif trace in yellow_list:
+                yellow_list.remove(trace)
+            else:
+                continue
+
+        ## change color of traces
         for j in range(len(stream)):
-            if stream[j] in red_list:
-                fig.axes[j].set_facecolor("#FF2929") 
-            elif stream[j] in orange_list:
+            trace = stream[j]  ## grab trace
+            if trace_get_name(trace) in POTENTIAL_GLITCHES:  ## display glitch in a different color
+                fig.axes[j].set_facecolor("#00FFFF")
+            elif trace in red_list:
+                fig.axes[j].set_facecolor("#FF2929")
+            elif trace in orange_list:
                 fig.axes[j].set_facecolor("orange")
-            elif stream[j] in yellow_list:
+            elif trace in yellow_list:
                 fig.axes[j].set_facecolor("yellow")
             else:
                 fig.axes[j].set_facecolor("#D3D3D3")
-        
+
         idx = -1
         max_val = 0
         for i in range(len(stream)):
             trace = stream[i]
+            if trace_get_name(trace) in POTENTIAL_GLITCHES:  ## won't consider glitches info for NETWORK EPICs
+                continue
             cur_data = trace.data[-trace.stats.numsamples:]
             mn = min(cur_data)
             mx = max(cur_data)
@@ -374,19 +419,18 @@ class SeedlinkPlotter(tkinter.Tk):
             if abs(max_val) < abs(best):
                 idx = i
                 max_val = abs(best)
-        
-        subprocess.Popen(["caput", "L1:ISI-USGS_NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.Popen(["caput", "L1:ISI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.Popen(["caput", "L1:ISI-USGS_NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
+
+        subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
         for trace in stream:
             i = indicies[trace.stats.station]
-            starter = f"L1:ISI-USGS_STATION_0{i}_" if i < 10 else f"STATION_{i}_"
+            starter = f"L1:SEI-USGS_STATION_0{i}_"
             cur_data = trace.data[-trace.stats.numsamples:]
             subprocess.Popen(["caput", starter + "MIN", f"{np.min(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
             subprocess.Popen(["caput", starter + "MAX", f"{np.max(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
             subprocess.Popen(["caput", starter + "MEAN", f"{np.mean(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different mean method
-        
         fig.canvas.draw()
 
 
@@ -473,6 +517,14 @@ class SeedlinkUpdater(SLClient):
         ids.sort()
         return ids
 
+def trace_get_name(trace):
+    return trace.stats.station
+
+def name_get_trace(stream, name):
+    for trace in stream:
+        if trace_get_name(trace) == name:
+            return trace
+    return "No trace with that name"
 
 def _parse_time_with_suffix_to_seconds(timestring):
     """
@@ -522,21 +574,35 @@ def Reverse_ID(n):
     return result
 
 
+def watcher(function):
+    thread = threading.Thread(target=function)
+    thread.setDaemon(True)
+    thread.start()
+    ## ensure this works!
+    while True:
+        sleep(60)
+        if thread.is_alive() == False:  ## connection lost, restarting connection
+            os.kill(thread.ident, signal.SIGTERM)
+            thread = threading.Thread(target=function)
+            thread.setDaemon(True)
+            thread.start()
+
+
 def main():
     parser = ArgumentParser(prog='seedlink_plotter',
                             description='Plot a realtime seismogram of a station',
                             formatter_class=ArgumentDefaultsHelpFormatter)
-    
+
     parser.add_argument(
         '-s', '--seedlink_streams', type=str, required=False,
         help='The seedlink stream selector string. It has the format '
              '"stream1[:selectors1],stream2[:selectors2],...", with "stream" '
              'in "NETWORK"_"STATION" format and "selector" a space separated '
              'list of "LOCATION""CHANNEL", e.g. '
-             '"IU_KONO:BHE BHN,MN_AQU:HH?.D".', 
-             default="US_LRAL:00BHZ, US_MIAR:00BHZ, IU_TEIG:00BHZ, IU_HKT:00BHZ, IU_DWPF:00BHZ")
+             '"IU_KONO:BHE BHN,MN_AQU:HH?.D".',
+             default="US_LRAL:00BHZ, IU_HKT:00BHZ, US_MIAR:00BHZ, IU_TEIG:00BHZ, IU_DWPF:00BHZ")
     # Real-time parametersm obspy import __version__ as OBSPY_VERSION
-    
+
     parser.add_argument(
         '--seedlink_server', type=str,
                         help='the seedlink server to connect to with port. "\
@@ -581,14 +647,14 @@ def main():
              '"m" for minutes, "h" for hours and "d" for days.',
         required=False, default=2,
         type=_parse_time_with_suffix_to_seconds)
-    parser.add_argument('-f', '--fullscreen', default=True,
+    parser.add_argument('-f', '--fullscreen', default=False,
                         action="store_true",
                         help='set to full screen on startup')
     parser.add_argument('-v', '--verbose', default=False,
                         action="store_true", dest="verbose",
                         help='show verbose debugging output')
+
     # parse the arguments
-    
     args = parser.parse_args()
     if args.lookback > 420:
         args.lookback = 420
@@ -610,11 +676,11 @@ def main():
     else:
         loglevel = logging.CRITICAL
     logging.basicConfig(level=loglevel)
-    
+
     i = 1
-    pref = "L1:ISI-USGS_"
+    pref = "L1:SEI-USGS_"
     for stat in LLO:
-        starter = f"STATION_0{i}_" if i < 10 else f"STATION_{i}_"
+        starter = f"STATION_0{i}_"
         subprocess.Popen(["caput", pref + starter + "LAT", f"{LLO[stat][0]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.Popen(["caput", pref + starter + "LON", f"{LLO[stat][1]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.Popen(["caput", pref + starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -623,7 +689,8 @@ def main():
         subprocess.Popen(["caput", pref + starter + "ID", f"{ID_Creator(stat)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.Popen(["caput", pref + starter + "NAME", f"{stat}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         i += 1
-        
+
+
     now = UTCDateTime()
     stream = Stream()
     events = Catalog()
@@ -637,26 +704,19 @@ def main():
         seedlink_client.slconn.set_sl_address(args.seedlink_server)
     seedlink_client.multiselect = args.seedlink_streams
 
-    # tes if drum plot or line plot
-    if any([x in args.seedlink_streams for x in ", ?*"]) or args.line_plot:
-        round_start = UTCDateTime(now.year, now.month, now.day, now.hour, 0, 0)
-        round_start = round_start + 3600 - args.backtrace_time
-        seedlink_client.begin_time = (round_start).format_seedlink()
-
-
-    seedlink_client.begin_time = (now - args.backtrace_time).format_seedlink()    
+    seedlink_client.begin_time = (now - args.backtrace_time).format_seedlink()
     seedlink_client.initialize()
     ids = seedlink_client.getTraceIDs()
     # start cl in a thread
-    thread = threading.Thread(target=seedlink_client.run)
-    thread.setDaemon(True)
-    thread.start()
 
-    # Wait few seconds to get data for the first plot
+    watching_conn = threading.Thread(target=watcher, args=(seedlink_client.run,))
+    watching_conn.setDaemon(True)
+    watching_conn.start()
+
     sleep(2)
 
-    master = SeedlinkPlotter(stream=stream, events=events, myargs=args,
-                             lock=lock, trace_ids=ids)
+    # Wait few seconds to get data for the first plot
+    master = SeedlinkPlotter(stream=stream, events=events, myargs=args, lock=lock, trace_ids=ids)
     master.mainloop()
 
 
