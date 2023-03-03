@@ -31,7 +31,7 @@ def func(n):  ## creates all our EPIC variables
     dic["NETWORK_STATION_NAME"] = {'type' : 'str'}  ## which station the max came from
     dicts.append(dic)
     dic = {}
-    dic["NETWORK_AUX1"] = {'type' : 'int'}
+    dic["NETWORK_AUX1"] = {'type' : 'int'}  ## currently being used to document glitches
     dicts.append(dic)
     dic = {}
     dic["NETWORK_AUX2"] = {'type' : 'int'}
@@ -53,20 +53,20 @@ def Reverse_ID(n):
     for i in range(2, itr, 2):
         result += chr(int(s[i:i+2], 16))
     return result
-    
+
 
 
 def main():
     server = SimpleServer()
-    
+
     ## Set up EPICs variables names
-    prefix = 'L1:ISI-USGS_'
+    prefix = 'L1:SEI-USGS_'
     pvdbs = func(6)
-    
+
     ## Initialize EPICs variables
     for pvdb in pvdbs:
         server.createPV(prefix, pvdb)
-        
+
     driver = myDriver()
     driver.setParam("NETWORK_PEAK", -1)
     driver.setParam("NETWORK_STATION_NUM", -1)
@@ -74,7 +74,7 @@ def main():
     driver.setParam("NETWORK_AUX2", -1)
     driver.setParam("NETWORK_AUX3", -1)
     driver.setParam("NETWORK_STATION_NAME", "")
-    
+
     # process CA transactions
     while True:
         server.process(0.1)
@@ -82,4 +82,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
