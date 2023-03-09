@@ -582,7 +582,7 @@ def watcher(function):
     while True:
         sleep(60)
         if thread.is_alive() == False:  ## connection lost, restarting connection
-            os.kill(thread.ident, signal.SIGTERM)
+            ## the thread is dead here
             thread = threading.Thread(target=function)
             thread.setDaemon(True)
             thread.start()
