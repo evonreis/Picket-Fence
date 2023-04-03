@@ -325,7 +325,7 @@ class SeedlinkPlotter(tkinter.Tk):
             if self.send_epics:
                 caput("H1:SEI-USGS_NETWORK_AUX1", -1)
         # Change equal_scale to False if auto-scaling should be turned off
-        stream.plot(fig=fig, method="fast", draw=False, equal_scale=True,
+        stream.plot(fig=fig, method="fast", draw=False, equal_scale=False,
                     size=(self.args.x_size, self.args.y_size), title="",
                     color='Blue', tick_format=self.args.tick_format,
                     number_of_ticks=self.args.time_tick_nb, min_bound=self.threshold)
