@@ -136,7 +136,7 @@ class SeedlinkPlotter(tkinter.Tk):
     This module plots realtime seismic data from a Seedlink server
     """
     def __init__(self, stream=None, events=None, myargs=None, lock=None,
-                 trace_ids=None, send_epics=False, *args, **kwargs):
+                 trace_ids=None, *args, **kwargs): # , send_epics=False
         tkinter.Tk.__init__(self, *args, **kwargs)
         self.wm_title("seedlink-plotter {}".format(myargs.seedlink_server))
         self.focus_set()
@@ -170,7 +170,6 @@ class SeedlinkPlotter(tkinter.Tk):
         self.ids = trace_ids
         self.threshold = args.threshold
         self.lookback = args.lookback
-        self.send_epics = send_epics
         self.color = ('#000000', '#e50000', '#0000e5', '#448630')  ## Regular colors: Black, Red, Blue, Green
         self.plot_graph()
 
@@ -289,6 +288,8 @@ class SeedlinkPlotter(tkinter.Tk):
         self.after(int(self.args.update_time * 1000), self.plot_graph)
 
     def plot_lines(self, stream, red_list, orange_list, yellow_list):
+        global send_epics
+        global conn
         for id_ in self.ids:
             if not any([tr.id == id_ for tr in stream]):
                 net, sta, loc, cha = id_.split(".")
@@ -308,7 +309,7 @@ class SeedlinkPlotter(tkinter.Tk):
             if len(trace.data) in [2, 4]:
                 stream.remove(trace)
                 i = indicies[trace.stats.station]
-                if self.send_epics:
+                if conn and send_epics:
                     starter = f"L1:SEI-USGS_STATION_0{i}_"
                     subprocess.Popen(["caput", starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     subprocess.Popen(["caput", starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -317,10 +318,10 @@ class SeedlinkPlotter(tkinter.Tk):
             trace_name = POTENTIAL_GLITCHES[0]
             i = indicies[trace_name]
             ## update AUX1 channel to hold picket number that is glitching
-            if self.send_epics:
+            if conn and send_epics:
                 subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_AUX1", f"{i}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif len(POTENTIAL_GLITCHES) > 1:  ## if multiple "glitches", they are probably not glitching (very large EQ??)
-            if self.send_epics:
+            if conn and send_epics:
                 subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             POTENTIAL_GLITCHES.clear() ## since they aren't glitching, remove them from list
         # Change equal_scale to False if auto-scaling should be turned off
@@ -427,19 +428,18 @@ class SeedlinkPlotter(tkinter.Tk):
                 idx = i
                 max_val = abs(best)
 
-        if self.send_epics:
-            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        for trace in stream:
-            i = indicies[trace.stats.station]
-            starter = f"L1:SEI-USGS_STATION_0{i}_"
-            cur_data = trace.data[-trace.stats.numsamples:]
-            if self.send_epics:
+        if conn and send_epics:
+            for trace in stream:
+                i = indicies[trace.stats.station]
+                starter = f"L1:SEI-USGS_STATION_0{i}_"
+                cur_data = trace.data[-trace.stats.numsamples:]
                 subprocess.Popen(["caput", starter + "MIN", f"{np.min(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
                 subprocess.Popen(["caput", starter + "MAX", f"{np.max(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
                 subprocess.Popen(["caput", starter + "MEAN", f"{np.mean(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different mean method
+            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
         fig.canvas.draw()
 
 
@@ -633,17 +633,36 @@ def watcher(function):
     thread.start()
     global master
     global stop_flag
+    global send_epics
+    global conn
     connection_lost = False
     while True:
         sleep(20)  ## possible that this pings too often. Maybe exponential with some MAX?? (ASK EDGARD)
-        if thread.is_alive() == False:  ## connection lost
+        if not thread.is_alive():  ## connection lost
             ## the thread is dead here
+            if conn and send_epics:
+                i = 1
+                pref = "L1:SEI-USGS_"
+                for stat, coord in LLO.items():
+                    starter = f"STATION_0{i}_"
+                    subprocess.Popen(["caput", pref + starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.Popen(["caput", pref + starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.Popen(["caput", pref + starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    i += 1
+                subprocess.Popen(["caput", pref + "NETWORK_PEAK", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", pref + "NETWORK_STATION_NUM", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", pref + "NETWORK_STATION_NAME", ""], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", pref + "NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # reset = True
             connection_lost = True
+            conn = False
             thread = threading.Thread(target=function, daemon=True)  ## restarting connection
             thread.start()
         else:  ## connection alive
             if connection_lost:  ## connection was previously dead
+                ## these are probably unnecessary
                 connection_lost = False
+                conn = True
                 stop_flag = True  ## killing thread (I am basically resetting the entire main function with this)
                 thread.join()
                 master.quit()  ## letting main thread break out of mainloop
@@ -756,9 +775,15 @@ def main():
             i += 1
 
     global leave
-    leave = False
+    global send_epics
     global stop_flag
+    global master
+    global conn
+    conn = True
     stop_flag = False
+    leave = False
+    send_epics = args.epics
+
     while leave == False:
         now = UTCDateTime()
         stream = Stream()
@@ -777,8 +802,7 @@ def main():
         seedlink_client.initialize()
         ids = seedlink_client.getTraceIDs()
         
-        global master
-        master = SeedlinkPlotter(stream=stream, events=events, myargs=args, lock=lock, trace_ids=ids)
+        master = SeedlinkPlotter(stream=stream, events=events, myargs=args, lock=lock, trace_ids=ids) #, send_epics=args.epics)
         
         watching_conn = threading.Thread(target=watcher, args=(seedlink_client.run,), daemon=True)  ## create a thread to monitor the connection with IRIS
         watching_conn.start()
@@ -787,7 +811,7 @@ def main():
         master.mainloop()  ## main thread is now creating the display
         master.destroy()  ## mainloop was exited, now destroying master
 
-        if (leave == True):
+        if leave:
             return
         watching_conn.join()  ## ensures all threads are cleaned before restarting
 
