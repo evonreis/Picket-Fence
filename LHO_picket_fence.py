@@ -230,6 +230,8 @@ class SeedlinkPlotter(tkinter.Tk):
             num=[0, 0.4726, 0.8729, 20.9160, 16.5661, 138.8009, 43.0143, 170.2868, 19.9511, 52.9649, 0]
             Filter=(num,den)
             for trace in stream:
+                #print(trace.meta)
+                print(trace.stats)
                 dt = trace.stats.delta
                 T=np.arange(0.0, len(trace.data))
                 T *= dt
@@ -438,9 +440,9 @@ class SeedlinkPlotter(tkinter.Tk):
             starter = f"H1:SEI-USGS_STATION_0{i}_"
             cur_data = trace.data[-trace.stats.numsamples:]
             if self.send_epics:
-                subprocess.Popen(["caput", starter + "MIN", f"{np.min(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
-                subprocess.Popen(["caput", starter + "MAX", f"{np.max(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
-                subprocess.Popen(["caput", starter + "MEAN", f"{np.mean(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different mean method
+                caput(starter + "MIN", f"{np.min(cur_data)}")  ## try different min method
+                caput(starter + "MAX", f"{np.max(cur_data)}")  ## try different max method
+                caput(starter + "MEAN", f"{np.mean(cur_data)}")  ## try different mean method
         fig.canvas.draw()
 
 
