@@ -54,11 +54,11 @@ import numpy as np
 
 LLO = {"LRAL" : (33.0399, -86.9978), "MIAR" : (34.5454, -93.5765),
        "TEIG" : (20.226, -88.276), "HKT" : (29.965, -95.838),
-       "DWPF" : (28.11, -81.433)}
+       "DWPF" : (28.11, -81.433), "KVTX": ( 27.546,-97.893)}
 
 indicies = {"LRAL" : 1, "MIAR" : 2,
             "TEIG" : 3, "HKT" : 4,
-            "DWPF" : 5}
+            "DWPF" : 5, "KVTX":6}
 
 POTENTIAL_GLITCHES = []
 
@@ -131,6 +131,7 @@ except AttributeError:
 
 
 
+
 class SeedlinkPlotter(tkinter.Tk):
     """
     This module plots realtime seismic data from a Seedlink server
@@ -198,46 +199,13 @@ class SeedlinkPlotter(tkinter.Tk):
         self.stop_time = now
 
         with self.lock:
-            # leave some data left of our start for possible processing
-            self.stream.trim(
-                starttime=self.start_time - self.args.backtrace_time, nearest_sample=False)
-            stream = self.stream.copy()
-
+            self.stream.CollectAndAnalyze()
+            stream=self.stream.copy()
         try:
             logging.info(str(stream.split()))
             if not stream:
                 raise Exception("Empty stream for plotting")
-
-            stream.merge(-1)
-
-            for trace in stream:
-                trace_len = len(trace.data)
-                flat_len = int(trace_len / 3) # Make first third of data the mean value to removethe startup transient
-                window_len = trace_len // 2
-                window_len -= (window_len % 2) # Make sure window length is an even number
-                if trace_len > window_len:
-                    hw = np.hanning(window_len) # Hanning window size of window length
-                    hw = np.split(hw, 2)
-                    hw = hw[0]
-                    hw_num = trace_len - window_len / 2 # Only first half of hanning window, don't want
-                    # the right side of the data to be impacted (only care about the most receent n seconds of data)
-                    hw_num = int(hw_num)
-                    new = np.tile(1, hw_num) # Make everything after the hanning window one, don't want most recent n seconds to be impacted
-                    hwp = np.append(hw, new)
-                    trace.data = trace.data * hwp # Apply window
-
-            # about to filter the data using Brian's Lowpass filter
-            den=[1.0000, 9.8339, 58.7394, 205.0490, 463.7573, 745.4739, 577.9041, 455.8890, 180.6478, 70.4068, 6.7771]
-            num=[0, 0.4726, 0.8729, 20.9160, 16.5661, 138.8009, 43.0143, 170.2868, 19.9511, 52.9649, 0]
-            Filter=(num,den)
-            for trace in stream:
-                dt = trace.stats.delta
-                T=np.arange(0.0, len(trace.data))
-                T *= dt
-                trace.data -= np.mean(trace.data)
-                tout, yout, _ =signal.lsim(Filter, trace.data, T, X0=None)
-                trace.data = yout
-
+                
             threshold = self.threshold # 500 nm/s normally, can be changed in the parameters
             ## in this function, the color lists may have glitched traces in them. We want this
             red_list = []
@@ -249,12 +217,12 @@ class SeedlinkPlotter(tkinter.Tk):
                 # earthquakes, any earthquakes above the threshold within this time will trigger the warning
                 if looking > trace_len:
                     raise ValueError("Lookback too far, not enough data")
-                flat_len = int(trace_len / 3) # Length of flattening (1st third by default)
+                #flat_len = int(trace_len / 3) # Length of flattening (1st third by default)
                 mean_val = np.mean(trace.data[trace_len // 2:]) # Get the mean value
-                flat_start = np.zeros(trace_len) # Make the array
-                for j in range(flat_len):
-                    flat_start[j] = mean_val # Make array the mean value instead of 0 to keep the intereface from zooming in too far
-                trace.data[0:flat_len] = flat_start[0:flat_len]
+                #flat_start = np.zeros(trace_len) # Make the array
+                #for j in range(flat_len):
+                #    flat_start[j] = mean_val # Make array the mean value instead of 0 to keep the intereface from zooming in too far
+                #trace.data[0:flat_len] = flat_start[0:flat_len]
                 max_val = max(max(trace.data[-int(looking):]), -min(trace.data[-int(looking):]))
                 length = int(min(len(trace.data), trace.stats.sampling_rate * 60 * 15))  ## ensures at most 15 minutes of data
                 max_val_over_trace = max(max(trace.data[:length]), -min(trace.data[:length]))  ## grabs max over most recent 15 minutes
@@ -290,13 +258,7 @@ class SeedlinkPlotter(tkinter.Tk):
     def plot_lines(self, stream, red_list, orange_list, yellow_list):
         global send_epics
         global conn
-        for id_ in self.ids:
-            if not any([tr.id == id_ for tr in stream]):
-                net, sta, loc, cha = id_.split(".")
-                header = {'network': net, 'station': sta, 'location': loc,
-                          'channel': cha, 'starttime': self.start_time}
-                data = np.zeros(2)
-                stream.append(Trace(data=data, header=header))
+
         stream.sort()
         self.figure.clear()
         fig = self.figure
@@ -310,7 +272,7 @@ class SeedlinkPlotter(tkinter.Tk):
                 stream.remove(trace)
                 i = indicies[trace.stats.station]
                 if conn and send_epics:
-                    starter = f"L1:SEI-USGS_STATION_0{i}_"
+                    starter = f"H1:SEI-USGS_STATION_0{i}_"
                     subprocess.Popen(["caput", starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     subprocess.Popen(["caput", starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     subprocess.Popen(["caput", starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -319,10 +281,10 @@ class SeedlinkPlotter(tkinter.Tk):
             i = indicies[trace_name]
             ## update AUX1 channel to hold picket number that is glitching
             if conn and send_epics:
-                subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_AUX1", f"{i}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", "H1:SEI-USGS_NETWORK_AUX1", f"{i}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif len(POTENTIAL_GLITCHES) > 1:  ## if multiple "glitches", they are probably not glitching (very large EQ??)
             if conn and send_epics:
-                subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", "H1:SEI-USGS_NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             POTENTIAL_GLITCHES.clear() ## since they aren't glitching, remove them from list
         # Change equal_scale to False if auto-scaling should be turned off
         stream.plot(fig=fig, method="fast", draw=False, equal_scale=False,
@@ -431,14 +393,14 @@ class SeedlinkPlotter(tkinter.Tk):
         if conn and send_epics:
             for trace in stream:
                 i = indicies[trace.stats.station]
-                starter = f"L1:SEI-USGS_STATION_0{i}_"
+                starter = f"H1:SEI-USGS_STATION_0{i}_"
                 cur_data = trace.data[-trace.stats.numsamples:]
                 subprocess.Popen(["caput", starter + "MIN", f"{np.min(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
                 subprocess.Popen(["caput", starter + "MAX", f"{np.max(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
                 subprocess.Popen(["caput", starter + "MEAN", f"{np.mean(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different mean method
-            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", "H1:SEI-USGS_NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", "H1:SEI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", "H1:SEI-USGS_NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
         fig.canvas.draw()
 
@@ -540,6 +502,7 @@ class SeedlinkUpdater(SLClient):
         with self.lock:
             self.stream += trace
             self.stream.merge(-1)
+            self.stream.trim(starttime=UTCDateTime()-3600)
             for trace in self.stream:
                 trace.stats.processing = []
         return False
@@ -571,6 +534,102 @@ class SeedlinkUpdater(SLClient):
         ids.sort()
         return ids
 
+class filteredStream(Stream):
+    
+    def __init__(self, rawStream, myargs=None):
+        # loglevel NOTSET delegates messages to parent logger
+        super(filteredStream, self).__init__()
+        
+        #self.lock=lock
+        self.args=myargs
+        
+        #initialize the internal traces
+        self.rawStream = rawStream
+        self.traces=rawStream.copy().traces
+        
+        #Define Brian's Lowpass filter that doesn't distort EQs [SEI aLog 2264]
+        num =[ 0, 0.4726, 0.8728, 20.9151, 16.5637, 138.7922, 43.0012, 170.2783, 19.9420, 52.9641 ,0]
+        den =[1.0000, 9.8557, 58.9535, 206.3141, 468.0879, 754.8555, 591.8468, 463.7391, 184.1213, 70.7469, 6.7789]
+        self.filter=(num,den)
+        
+        #Internal states for Brian's filter
+        self.customMetadata=dict()
+        for trace in self.traces:
+            self.customMetadata[trace.id]=dict()
+            self.FirstLowpass(trace)
+        
+    def HanningWindow(self,trace):
+        trace_len = len(trace.data)
+        flat_len = int(trace_len / 3) # Make first third of data the mean value to removethe startup transient
+        window_len = trace_len // 2
+        window_len -= (window_len % 2) # Make sure window length is an even number
+        if trace_len > window_len:
+            hw = np.hanning(window_len) # Hanning window size of window length
+            hw = np.split(hw, 2)
+            hw = hw[0]
+            hw_num = trace_len - window_len / 2 # Only first half of hanning window, don't want
+            # the right side of the data to be impacted (only care about the most recent n seconds of data)
+            hw_num = int(hw_num)
+            new = np.tile(1, hw_num) # Make everything after the hanning window one, don't want most recent n seconds to be impacted
+            hwp = np.append(hw, new)
+            trace.data = trace.data * hwp # Apply window
+            
+    def FirstLowpass(self,trace):
+            self.HanningWindow(trace)
+            dt = trace.stats.delta
+            T=np.arange(0.0, len(trace.data))
+            T *= dt
+            tout, yout, xout =signal.lsim(self.filter, trace.data, T, X0=None)
+            trace.data = yout
+            trace.trim(starttime=trace.stats.starttime+180) #3 minutes eliminates the filter transient
+            self.customMetadata[trace.id]['filterState']=xout[-1]
+            self.customMetadata[trace.id]['endtime']=trace.stats.endtime
+    
+    def CollectAndAnalyze(self):
+        #with self.lock:
+        for trace in self.rawStream.traces:
+            if trace.id in self.customMetadata.keys():
+                oldEndtime=self.customMetadata[trace.id]['endtime']
+                
+                #Trim traces to isolate the new data
+                if (trace.stats.endtime-oldEndtime)>0:
+                    dt = trace.stats.delta
+                    newTrace=trace.slice(starttime=oldEndtime+dt)
+                    trace_len=len(newTrace.data)
+
+                    #filter the new data and trim
+                    xin=self.customMetadata[newTrace.id]['filterState'];
+                    T=np.arange(0.0, trace_len)
+                    T *= dt
+                    tout, yout, xout =signal.lsim(self.filter, newTrace.data, T, X0=xin)
+                    newTrace.data = yout
+                    self.customMetadata[newTrace.id]['filterState']=xout[-1]
+                    self.customMetadata[newTrace.id]['endtime']=newTrace.stats.endtime
+                    self.append(newTrace)
+                    
+            else:
+                newTrace=trace.copy()
+                self.customMetadata[trace.id]=dict()
+                self.FirstLowpass(newTrace)    
+                self.append(newTrace)
+                
+        #Merge and clean the trace information
+        self.merge(-1)
+        self.updateMetadata()
+        self.trim(UTCDateTime()-2*self.args.backtrace_time)
+        for trace in self.traces:
+            trace.stats.processing = [] 
+            
+    def updateMetadata(self):
+        #Grab statistics for the traces in the last 'lookback' seconds
+        for trace in self.traces:
+            dummyTrace=trace.slice(starttime=UTCDateTime()-self.args.lookback)
+            if len(dummyTrace.data)!=0:
+                self.customMetadata[trace.id]['MAX']=np.max(dummyTrace.data)
+                self.customMetadata[trace.id]['MIN']=np.min(dummyTrace.data)
+                self.customMetadata[trace.id]['MEAN']=np.mean(dummyTrace.data)
+                
+                
 def trace_get_name(trace):
     return trace.stats.station
 
@@ -681,13 +740,13 @@ def main():
              'in "NETWORK"_"STATION" format and "selector" a space separated '
              'list of "LOCATION""CHANNEL", e.g. '
              '"IU_KONO:BHE BHN,MN_AQU:HH?.D".',
-             default="US_LRAL:00BHZ, IU_HKT:00BHZ, US_MIAR:00BHZ, IU_TEIG:00BHZ, IU_DWPF:00BHZ")
+             default="US_LRAL:00BHZ, IU_HKT:00BHZ, US_MIAR:00BHZ, IU_TEIG:00BHZ, IU_DWPF:00BHZ, US_KVTX:00BHZ")
     # Real-time parametersm obspy import __version__ as OBSPY_VERSION
 
     parser.add_argument(
         '--seedlink_server', type=str,
                         help='the seedlink server to connect to with port. "\
-                        "ex: rtserver.ipgp.fr:18000 ', required=False, default="rtserve.iris.washington.edu:18000")
+                        "ex: rtserver.ipgp.fr:18000 ', required=False, default="cwbpub.cr.usgs.gov:18000")
 
     parser.add_argument(
         '-b', '--backtrace_time',
@@ -798,11 +857,16 @@ def main():
             seedlink_client.slconn.set_sl_address(args.seedlink_server)
         seedlink_client.multiselect = args.seedlink_streams
         
-        seedlink_client.begin_time = (now - args.backtrace_time).format_seedlink()
+        seedlink_client.begin_time = (now - 500).format_seedlink()
         seedlink_client.initialize()
         ids = seedlink_client.getTraceIDs()
         
-        master = SeedlinkPlotter(stream=stream, events=events, myargs=args, lock=lock, trace_ids=ids) #, send_epics=args.epics)
+        sleep(1)
+        print('Downloading from server:  ', args.seedlink_server)
+        sleep(1)
+        
+        filtStream=filteredStream(stream, myargs=args)
+        master = SeedlinkPlotter(stream=filtStream, events=events, myargs=args, lock=lock, trace_ids=ids) #, send_epics=args.epics)
         
         watching_conn = threading.Thread(target=watcher, args=(seedlink_client.run,), daemon=True)  ## create a thread to monitor the connection with IRIS
         watching_conn.start()
