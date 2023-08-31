@@ -586,7 +586,7 @@ class filteredStream(Stream):
     def CollectAndAnalyze(self):
         #with self.lock:
         for trace in self.rawStream.traces:
-            if trace.id in self.customMetadata.keys():
+            if trace.id in self.getTraceIDs():
                 oldEndtime=self.customMetadata[trace.id]['endtime']
                 
                 #Trim traces to isolate the new data
@@ -618,6 +618,9 @@ class filteredStream(Stream):
         for trace in self.traces:
             trace.stats.processing = [] 
             
+    def getTraceIDs(self):
+        return [tr.id for tr in self.traces]    
+    
     def updateMetadata(self):
         #Grab statistics for the traces in the last 'lookback' seconds
         for trace in self.traces:
@@ -862,9 +865,9 @@ def main():
         seedlink_client.initialize()
         ids = seedlink_client.getTraceIDs()
         
-        sleep(1)
+        #sleep(1)
         print('Downloading from server:  ', args.seedlink_server)
-        sleep(1)
+        #sleep(1)
         
         filtStream=filteredStream(stream, myargs=args)
         master = SeedlinkPlotter(stream=filtStream, events=events, myargs=args, lock=lock, trace_ids=ids) #, send_epics=args.epics)

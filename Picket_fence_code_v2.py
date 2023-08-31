@@ -193,11 +193,14 @@ class SeedlinkUpdater(SLClient):
 
 class filteredStream(Stream):
     
-    def __init__(self, rawStream, myargs=None):
+    def __init__(self, rawStream, filterTransientTime=180, lookback=7*60):
         super(filteredStream, self).__init__()
         
         #self.lock=lock
         self.args=myargs
+        #self.filterTransientTime
+        #self.analyzeLookbackTime
+        #self.streamDuration
         
         #initialize the internal traces
         self.rawStream = rawStream
@@ -213,8 +216,9 @@ class filteredStream(Stream):
         for trace in self.traces:
             self.customMetadata[trace.id]=dict()
             self.FirstLowpass(trace)
-        
-    def HanningWindow(self,trace):
+            
+    #Function that creates a hanning window for initial filtering of data, helps alleviate transients.
+    def HanningWindow(self,trace): 
         trace_len = len(trace.data)
         window_len = trace_len // 2
         window_len -= (window_len % 2) # Make sure window length is an even number
@@ -229,6 +233,7 @@ class filteredStream(Stream):
             hwp = np.append(hw, new)
             trace.data = trace.data * hwp # Apply window
             
+    #Function that applies a lowpass filter to an initial portion of data for which we have no internal filter states   
     def FirstLowpass(self,trace):
             self.HanningWindow(trace)
             dt = trace.stats.delta
@@ -236,14 +241,15 @@ class filteredStream(Stream):
             T *= dt
             tout, yout, xout =signal.lsim(self.filter, trace.data, T, X0=None)
             trace.data = yout
-            trace.trim(starttime=trace.stats.starttime+180) #TODO: Change this to actually be useful
+            trace.trim(starttime=trace.stats.starttime+180) #TODO: Change this to actually be useful, do we want to chop 3 minutes of data?
             self.customMetadata[trace.id]['filterState']=xout[-1]
             self.customMetadata[trace.id]['endtime']=trace.stats.endtime
     
+    #Function that updates the filtered Stream with new data from the rawStream that is connected to it
     def CollectAndAnalyze(self):
         #with self.lock:
         for trace in self.rawStream.traces:
-            if trace.id in self.customMetadata.keys():
+            if trace.id in self.getTraceIDs(): #if we have metadata for the trace TODO: change for 'if we have the trace in the filtered stream'
                 oldEndtime=self.customMetadata[trace.id]['endtime']
                 
                 #Trim traces to isolate the new data
@@ -262,7 +268,7 @@ class filteredStream(Stream):
                     self.customMetadata[newTrace.id]['endtime']=newTrace.stats.endtime
                     self.append(newTrace)
                     
-            else:#TODO: What happens if a station comes in and out?
+            else:#This trace is only present in the raw stream but has never been filtered
                 newTrace=trace.copy()
                 self.customMetadata[trace.id]=dict()
                 self.FirstLowpass(newTrace)    
@@ -273,8 +279,13 @@ class filteredStream(Stream):
         self.updateMetadata()
         self.trim(UTCDateTime()-2*self.args.backtrace_time) #TODO: make this trim not arbitrary
         for trace in self.traces:
-            trace.stats.processing = [] 
+            trace.stats.processing = []
             
+    #Function that returns the ids currently in the filtered stream        
+    def getTraceIDs(self):
+        return [tr.id for tr in self.traces]
+    
+    #This function keeps track of metadata for the traces over the last 'lookback' seconds
     def updateMetadata(self):
         #Grab statistics for the traces in the last 'lookback' seconds
         for trace in self.traces:
