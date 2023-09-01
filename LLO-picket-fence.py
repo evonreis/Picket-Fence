@@ -272,7 +272,7 @@ class SeedlinkPlotter(tkinter.Tk):
                 stream.remove(trace)
                 i = indicies[trace.stats.station]
                 if conn and send_epics:
-                    starter = f"H1:SEI-USGS_STATION_0{i}_"
+                    starter = f"L1:SEI-USGS_STATION_0{i}_"
                     subprocess.Popen(["caput", starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     subprocess.Popen(["caput", starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     subprocess.Popen(["caput", starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -281,10 +281,10 @@ class SeedlinkPlotter(tkinter.Tk):
             i = indicies[trace_name]
             ## update AUX1 channel to hold picket number that is glitching
             if conn and send_epics:
-                subprocess.Popen(["caput", "H1:SEI-USGS_NETWORK_AUX1", f"{i}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_AUX1", f"{i}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif len(POTENTIAL_GLITCHES) > 1:  ## if multiple "glitches", they are probably not glitching (very large EQ??)
             if conn and send_epics:
-                subprocess.Popen(["caput", "H1:SEI-USGS_NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             POTENTIAL_GLITCHES.clear() ## since they aren't glitching, remove them from list
         # Change equal_scale to False if auto-scaling should be turned off
         stream.plot(fig=fig, method="fast", draw=False, equal_scale=False,
@@ -393,14 +393,14 @@ class SeedlinkPlotter(tkinter.Tk):
         if conn and send_epics:
             for trace in stream:
                 i = indicies[trace.stats.station]
-                starter = f"H1:SEI-USGS_STATION_0{i}_"
+                starter = f"L1:SEI-USGS_STATION_0{i}_"
                 cur_data = trace.data[-trace.stats.numsamples:]
                 subprocess.Popen(["caput", starter + "MIN", f"{np.min(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
                 subprocess.Popen(["caput", starter + "MAX", f"{np.max(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
                 subprocess.Popen(["caput", starter + "MEAN", f"{np.mean(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different mean method
-            subprocess.Popen(["caput", "H1:SEI-USGS_NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", "H1:SEI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", "H1:SEI-USGS_NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_STATION_NUM", f"{indicies[stream[idx].stats.station]}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", "L1:SEI-USGS_NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
         fig.canvas.draw()
 
