@@ -54,11 +54,17 @@ def main():
             "Channel":"US_NEW:00BHZ",
             "PreferredServer":"cwbpub.cr.usgs.gov:18000"
         },
-        "NLWA":{
-            "Latitude":47.392,
-            "Longitude":-123.869,
-            "Channel":"US_NLWA:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+#        "NLWA":{
+#            "Latitude":47.392,
+#            "Longitude":-123.869,
+#            "Channel":"US_NLWA:00BHZ",
+#            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+#        },
+        "OTR":{
+            "Latitude":48.08632 ,
+            "Longitude":-124.34518,
+            "Channel":"UW_OTR:HHZ",
+            "PreferredServer":"pnsndata.ess.washington.edu:18000"
         },
         "MSO":{
             "Latitude":46.829,

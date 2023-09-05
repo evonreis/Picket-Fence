@@ -179,7 +179,6 @@ class SeedlinkUpdater(SLClient):
                 count += 1
             slpack = self.slconn.collect()
             if self.stop_flag:
-                print('a')
                 break
 
         # Close the SeedLinkConnection
@@ -226,7 +225,7 @@ class SeedlinkUpdater(SLClient):
         # new samples add to the main stream which is then trimmed
         with self.lock:
             self.stream += trace
-            self.stream.merge(-1)
+            self.stream.merge(1,fill_value='interpolate')
             self.stream.trim(starttime=UTCDateTime()-3600)
             for trace in self.stream:
                 trace.stats.processing = []
@@ -254,7 +253,7 @@ class SeedlinkUpdater(SLClient):
         return ids
 class picketFenceArguments():
     def __init__(self, stream_time=3600, backtrace_time=15*60, x_position=0, y_position=0, x_size=800, y_size=600, title_size=10, time_legend_size=10,
-    tick_format='%H:%M:%S',time_tick_nb=5,threshold=500,lookback=50,update_time=2,fullscreen=False,verbose=False,send_epics=False,epics_prefix=None):
+    tick_format='%H:%M:%S',time_tick_nb=5,threshold=500,lookback=120,update_time=2,fullscreen=False,verbose=False,send_epics=False,epics_prefix=None):
     
         #Plot format properties
         self.x_position=x_position              # horizontal position of the graph
@@ -440,7 +439,6 @@ class SeedlinkPlotter(tkinter.Tk):
 
     def _quit(self, event):
         self.leave = [True]
-        print('here!')
         event.widget.quit()
 
     def _bind_keys(self):
@@ -513,10 +511,9 @@ class SeedlinkPlotter(tkinter.Tk):
         dead_ids=[key for key in self.pickets.keys() if key not in trace_ids]
         
         if self.send_epics:
+            prefix=self.epics_prefix
             for id_ in dead_ids:
-                i = self.pickets[id_]['index']
-                prefix=self.epics_prefix
-                starter = "STATION_0" + statInfo['index'] + "_"
+                starter = "STATION_0" + self.pickets[id_]['index'] + "_"
                 subprocess.Popen(["caput", prefix + starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 subprocess.Popen(["caput", prefix + starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 subprocess.Popen(["caput", prefix + starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -639,10 +636,9 @@ class SeedlinkPlotter(tkinter.Tk):
                 max_val = abs(best)
 
         if self.send_epics:
+            prefix=self.epics_prefix
             for trace in stream:
-                i = self.pickets[trace.stats.station]['index']
-                prefix=self.epics_prefix
-                starter = "STATION_0" + statInfo['index'] + "_"
+                starter = "STATION_0" + self.pickets[trace.stats.station]['index'] + "_"
                 cur_data = trace.data[-trace.stats.numsamples:]
                 subprocess.Popen(["caput", prefix + starter + "MIN", f"{np.min(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
                 subprocess.Popen(["caput", prefix + starter + "MAX", f"{np.max(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
@@ -650,7 +646,7 @@ class SeedlinkPlotter(tkinter.Tk):
             subprocess.Popen(["caput", prefix + "NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.Popen(["caput", prefix + "NETWORK_STATION_NUM", f"{self.pickets[stream[idx].stats.station]['index']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.Popen(["caput", prefix + "NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", prefix + "SERVER_GPS", tconvert("now").seconds], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').seconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         fig.canvas.draw()
 			                
@@ -662,40 +658,6 @@ def name_get_trace(stream, name):
         if trace_get_name(trace) == name:
             return trace
     return "No trace with that name"
-
-def _parse_time_with_suffix_to_seconds(timestring):
-    """
-    Parse a string to seconds as float.
-    If string can be directly converted to a float it is interpreted as
-    seconds. Otherwise the following suffixes can be appended, case
-    insensitive: "s" for seconds, "m" for minutes, "h" for hours, "d" for days.
-    >>> _parse_time_with_suffix_to_seconds("12.6")
-    12.6
-    >>> _parse_time_with_suffix_to_seconds("12.6s")
-    12.6
-    >>> _parse_time_with_suffix_to_minutes("12.6m")
-    756.0
-    >>> _parse_time_with_suffix_to_seconds("12.6h")
-    45360.0
-    :type timestring: str
-    :param timestring: "s" for seconds, "m" for minutes, "h" for hours, "d" for
-        days.
-    :rtype: float
-    """
-    try:
-        return float(timestring)
-    except:
-        timestring, suffix = timestring[:-1], timestring[-1].lower()
-        mult = {'s': 1.0, 'm': 60.0, 'h': 3600.0, 'd': 3600.0 * 24}[suffix]
-        return float(timestring) * mult
-
-
-def _parse_time_with_suffix_to_minutes(timestring):
-    try:
-        return float(timestring)
-    except:
-        seconds = _parse_time_with_suffix_to_seconds(timestring)
-    return seconds / 60.0
 
 
 def ID_Creator(s):
@@ -727,9 +689,9 @@ def initEpics(picket_dict, prefix): #TODO: Migrate this function to the EPICS se
                 subprocess.Popen(["caput", prefix + starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 subprocess.Popen(["caput", prefix + starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 subprocess.Popen(["caput", prefix + starter + "ID", f"{ID_Creator(statName)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                subprocess.Popen(["caput", prefix + starter + "NAME", f"{statName}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                
-    subprocess.Popen(["caput", prefix + "SERVER_GPS", tconvert("now").seconds], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", prefix + starter + "NAME", f"{statName}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)           
+    subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').seconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
 
 #def updateEpics(picket_dict, prefix, updateMetadata):
 
@@ -741,6 +703,9 @@ class PicketFence():
         self.leave = [False]
         self.send_epics = self.args.send_epics
         self.epics_prefix = epics_prefix
+        if self.send_epics:
+            assert type(epics_prefix) == str , "the epics prefix should be a string"
+        self.args.epics_prefix=epics_prefix
 
     def run(self):
         while self.leave[0]==False:
@@ -770,7 +735,7 @@ class PicketFence():
                 self.seedlink_clients.append(SeedlinkUpdater(self.stream, myargs=self.args, lock=self.lock))
                 self.seedlink_clients[ii].slconn.set_sl_address(server_name)
                 self.seedlink_clients[ii].multiselect = server_dict[server_name]
-                self.seedlink_clients[ii].begin_time = (self.startnow - 500).format_seedlink() #TODO make it not 500 seconds flat
+                self.seedlink_clients[ii].begin_time = (self.startnow - 2000).format_seedlink() #TODO make it not 2000 seconds flat
                 self.seedlink_clients[ii].initialize()
                 print('Downloading from server:  ', server_name)
                 print(server_dict[server_name])
@@ -785,12 +750,11 @@ class PicketFence():
         
             for watching_thread in self.watchers:
                 watching_thread.start()
-            sleep(2)
+            sleep(3)
 
             self.master.mainloop()  ## main thread is now creating the display
             self.leave=self.master.leave;
             self.master.destroy()  ## mainloop was exited, now destroying master
-            print(self.leave[0])
             if self.leave[0]:
                 return
             for watching_thread in self.watchers:
