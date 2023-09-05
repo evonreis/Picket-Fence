@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from pcaspy import Driver, SimpleServer
-
+from gwpy.time import tconvert
 
 class myDriver(Driver):
     def  __init__(self):
@@ -39,6 +39,14 @@ def func(n):  ## creates all our EPIC variables
     dic = {}
     dic["NETWORK_AUX3"] = {'type' : 'int'}
     dicts.append(dic)
+    
+    #heartbeat to check the uptime of the picket fence code
+    dic = {}
+    dic["SERVER_START_GPS"] = {'type' : 'int'}
+    dicts.append(dic)
+    dic = {}
+    dic["SERVER_GPS"] = {'type' : 'int'}
+    dicts.append(dic)
     return dicts
 
 
@@ -53,8 +61,6 @@ def Reverse_ID(n):
     for i in range(2, itr, 2):
         result += chr(int(s[i:i+2], 16))
     return result
-
-
 
 def main():
     server = SimpleServer()
@@ -74,7 +80,9 @@ def main():
     driver.setParam("NETWORK_AUX2", -1)
     driver.setParam("NETWORK_AUX3", -1)
     driver.setParam("NETWORK_STATION_NAME", "")
-
+    driver.setParam("SERVER_START_GPS", tconvert("now").seconds)
+    driver.setParam("SERVER_GPS", tconvert("now").seconds)
+    
     # process CA transactions
     while True:
         server.process(0.1)

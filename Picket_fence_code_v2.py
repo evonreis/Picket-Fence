@@ -33,46 +33,102 @@ Created on Wed Aug 30 11:36:15 2023
 import warnings
 warnings.filterwarnings("ignore", "Badly*")  # suppresses warning calls from lsim filter function
 
+import matplotlib
+
+# Set the backend for matplotlib.
+matplotlib.use("TkAgg")
+matplotlib.rc('figure.subplot', hspace=0)
+matplotlib.rc('font', family="monospace")
 try:
     # Py3
     import tkinter
 except ImportError:
     # Py2
     import Tkinter as tkinter
-    
-import matplotlib
-# Set the backend for matplotlib.
-matplotlib.use("TkAgg")
-matplotlib.rc('figure.subplot', hspace=0)
-matplotlib.rc('font', family="monospace")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
 from matplotlib.patheffects import withStroke
 from matplotlib.dates import date2num
 import matplotlib.pyplot as plt
-
-
 from obspy import Stream, Trace
+from obspy import __version__ as OBSPY_VERSION
 from obspy.core import UTCDateTime
 from obspy.core.event import Catalog
 from obspy.core.util import MATPLOTLIB_VERSION
-from obspy.clients.seedlink.slpacket import SLPacket
-from obspy.clients.seedlink import SLClient
-from obspy.clients.fdsn import Client
-
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import threading
 import os
 from time import sleep
 from datetime import datetime
+from gwpy.time import tconvert
 import subprocess
 import sys
 from scipy import signal
 
 import logging
 import numpy as np
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+
+
+OBSPY_VERSION = [int(x) for x in OBSPY_VERSION.split(".")[:2]]
+# check obspy version and warn if it's below 0.10.0, which means that a memory
+# leak is present in the used seedlink client (unless working on some master
+# branch version after obspy/obspy@5ce975c3710ca, which is impossible to check
+# reliably). see #7 and obspy/obspy#918.
+# imports depend of the obspy version
+if OBSPY_VERSION < [0, 10]:
+    warning_msg = (
+        "ObsPy version < 0.10.0 has a memory leak in SeedLink Client. "
+        "Please update your ObsPy installation to avoid being affected by "
+        "the memory leak (see "
+        "https://github.com/bonaime/seedlink_plotter/issues/7).")
+    warnings.warn(warning_msg)
+# Check if OBSPY_VERSION < 0.11
+if OBSPY_VERSION < [0, 11]:
+    # 0.10.x
+    from obspy.seedlink.slpacket import SLPacket
+    from obspy.seedlink.slclient import SLClient
+    from obspy.fdsn import Client
+else:
+    # >= 0.11.0
+    from obspy.clients.seedlink.slpacket import SLPacket
+    from obspy.clients.seedlink import SLClient
+    from obspy.clients.fdsn import Client
+
+# Compatibility checks
+# UTCDateTime
+try:
+    UTCDateTime.format_seedlink
+except AttributeError:
+    # create the new format_seedlink fonction using the old formatSeedLink
+    # method
+    def format_seedlink(self):
+        return self.formatSeedLink()
+
+
+    # add the function in the class
+    setattr(UTCDateTime, 'format_seedlink', format_seedlink)
+# SLPacket
+try:
+    SLPacket.get_type
+except AttributeError:
+    # create the new get_type fonction using the old getType method
+    def get_type(self):
+        return self.getType()
+
+    # add the function in the class
+    setattr(SLPacket, 'get_type', get_type)
+
+try:
+    SLPacket.get_trace
+except AttributeError:
+    # create the new get_trace fonction using the old getTrace method
+    def get_trace(self):
+        return self.getTrace()
+
+    # add the function in the class
+    setattr(SLPacket, 'get_trace', get_trace)
 
 class SeedlinkUpdater(SLClient):
     
@@ -82,6 +138,7 @@ class SeedlinkUpdater(SLClient):
         self.stream = stream
         self.lock = lock
         self.args = myargs
+        self.stop_flag=False
 
     def run(self, packet_handler=None):
         """
@@ -96,8 +153,7 @@ class SeedlinkUpdater(SLClient):
             return `True` to abort the request or `False` to continue the
             request.
         """
-        global stop_flag
-        stop_flag = False
+        
         if packet_handler is None:
             packet_handler = self.packet_handler
         if self.infolevel is not None:
@@ -122,11 +178,17 @@ class SeedlinkUpdater(SLClient):
             else:
                 count += 1
             slpack = self.slconn.collect()
-            if stop_flag:
+            if self.stop_flag:
+                print('a')
                 break
 
         # Close the SeedLinkConnection
         self.slconn.close()
+    def packet_handler(self, count, slpack):
+        """
+        for compatibility with obspy 0.10.3 renaming
+        """
+        self.packetHandler(count, slpack)
 
     def packetHandler(self, count, slpack):
         """
@@ -165,7 +227,7 @@ class SeedlinkUpdater(SLClient):
         with self.lock:
             self.stream += trace
             self.stream.merge(-1)
-            self.stream.trim(starttime=UTCDateTime()-3600) #TODO STREAMLINE THIS
+            self.stream.trim(starttime=UTCDateTime()-3600)
             for trace in self.stream:
                 trace.stats.processing = []
         return False
@@ -190,17 +252,45 @@ class SeedlinkUpdater(SLClient):
                 ids.append(".".join((net, sta, loc, cha)))
         ids.sort()
         return ids
+class picketFenceArguments():
+    def __init__(self, stream_time=3600, backtrace_time=15*60, x_position=0, y_position=0, x_size=800, y_size=600, title_size=10, time_legend_size=10,
+    tick_format='%H:%M:%S',time_tick_nb=5,threshold=500,lookback=50,update_time=2,fullscreen=False,verbose=False,send_epics=False,epics_prefix=None):
+    
+        #Plot format properties
+        self.x_position=x_position              # horizontal position of the graph
+        self.y_position=y_position              # vertical position of the graph
+        self.x_size=x_size                      # horizontal size of graph
+        self.y_size=y_size                      # vertical size of graph
+        self.title_size= title_size             # title size of each station in the graph
+        self.time_legend_size=time_legend_size  # size of the numbers in the time (horizontal) axis
+        self.tick_format=tick_format            # time format for the time ticks
+        self.time_tick_nb=time_tick_nb          # number of time ticks
+        self.fullscreen=fullscreen              # True toggles the fullscreen display
 
+        #Data display properties
+        self.backtrace_time=backtrace_time      # time (in seconds) that will be displayed in plots
+    
+        #Data analysis properties
+        self.stream_time=stream_time            # time in seconds that will be kept of the stream before deleting
+        self.threshold=threshold                # threshold in (nm/s) for determining the triggers for color changes    
+        self.lookback=lookback                  # time (in seconds) that we analyze in search of earthquake signals
+        self.update_time=update_time            # refresh rate (in seconds) of the graph
+    
+        #other arguments
+        self.verbose=verbose                    # True toggles the debug log
+        self.send_epics=send_epics              # True enables data logging into EPICS variables  
+        if self.send_epics:
+            assert type(epics_prefix) == str , "the epics prefix should be a string"
+        self.epics_prefix=epics_prefix
+          
 class filteredStream(Stream):
     
-    def __init__(self, rawStream, filterTransientTime=180, lookback=7*60):
+    def __init__(self, rawStream, myargs, filterTransientTime=180):
         super(filteredStream, self).__init__()
         
         #self.lock=lock
         self.args=myargs
-        #self.filterTransientTime
-        #self.analyzeLookbackTime
-        #self.streamDuration
+        self.filterTransientTime=filterTransientTime
         
         #initialize the internal traces
         self.rawStream = rawStream
@@ -241,7 +331,7 @@ class filteredStream(Stream):
             T *= dt
             tout, yout, xout =signal.lsim(self.filter, trace.data, T, X0=None)
             trace.data = yout
-            trace.trim(starttime=trace.stats.starttime+180) #TODO: Change this to actually be useful, do we want to chop 3 minutes of data?
+            trace.trim(starttime=trace.stats.starttime+self.filterTransientTime) #TODO: Change this to actually be useful, do we want to chop 3 minutes of data?
             self.customMetadata[trace.id]['filterState']=xout[-1]
             self.customMetadata[trace.id]['endtime']=trace.stats.endtime
     
@@ -294,3 +384,429 @@ class filteredStream(Stream):
                 self.customMetadata[trace.id]['MAX']=np.max(dummyTrace.data)
                 self.customMetadata[trace.id]['MIN']=np.min(dummyTrace.data)
                 self.customMetadata[trace.id]['MEAN']=np.mean(dummyTrace.data)
+                
+            #check for glitches too
+            dummyTrace=trace.slice(starttime=UTCDateTime()-self.args.backtrace_time)
+            if len(dummyTrace.data)!=0:
+                self.customMetadata[trace.id]['Glitch_ABSMAX']=dummyTrace.max()              
+class SeedlinkPlotter(tkinter.Tk):
+    """
+    This module plots realtime seismic data from a Seedlink server
+    """
+    def __init__(self, stream=None, picket_dict=None, events=None, myargs=None, lock=None, leave=[False],
+                 *args, **kwargs): # , send_epics=False
+        tkinter.Tk.__init__(self, *args, **kwargs)
+        self.wm_title("seedlink-plotter {}".format("Picket Fence v2"))
+        self.focus_set()
+        self._bind_keys()
+        args = myargs
+        self.lock = lock
+        # size and position
+        self.geometry(str(args.x_size) + 'x' + str(args.y_size) + '+' + str(
+            args.x_position) + '+' + str(args.y_position))
+        w, h, pad = self.winfo_screenwidth(), self.winfo_screenheight(), 3
+        self._geometry = ("%ix%i+0+0" % (w - pad, h - pad))
+        # hide the window decoration
+        if args.fullscreen:
+            self._toggle_fullscreen(None)
+
+        # main figure
+        self.figure = Figure()
+        canvas = FigureCanvasTkAgg(self.figure, master=self)
+
+        if MATPLOTLIB_VERSION[:2] >= [2, 2]:
+            canvas.draw()
+        else:
+            canvas.show()
+        canvas.get_tk_widget().pack(fill=tkinter.BOTH, expand=1)
+
+        self.backtrace = args.backtrace_time
+        self.canvas = canvas
+        self.args = args
+        self.pickets=picket_dict
+        self.send_epics=self.args.send_epics
+        self.epics_prefix=self.args.epics_prefix
+        self.leave=leave
+        self.stream = stream
+        self.events = events
+        self.threshold = args.threshold
+        self.lookback = args.lookback
+        self.color = ('#000000', '#e50000', '#0000e5', '#448630')  ## Regular colors: Black, Red, Blue, Green
+        self.POTENTIAL_GLITCHES = []
+        self.plot_graph()
+
+    def _close_window(self):
+        self.event_generate("<KeyPress>", keysym="q")  ## simulates 'q' being pressed ('q' is binded with quit)
+
+    def _quit(self, event):
+        self.leave = [True]
+        print('here!')
+        event.widget.quit()
+
+    def _bind_keys(self):
+        self.bind('<Escape>', self._quit)
+        self.bind('q', self._quit)
+        self.protocol("WM_DELETE_WINDOW", self._close_window)
+        self.bind('f', self._toggle_fullscreen)
+
+    def _toggle_fullscreen(self, event):
+        g = self.geometry()
+        self.geometry(self._geometry)
+        self._geometry = g
+
+    def plot_graph(self):
+        now = UTCDateTime()
+        self.start_time = now - self.backtrace
+        self.stop_time = now
+
+        with self.lock:
+            self.stream.CollectAndAnalyze()
+            stream=self.stream.copy()
+        try:
+            logging.info(str(stream.split()))
+            if not stream:
+                raise Exception("Empty stream for plotting")
+                
+            threshold = self.threshold # 500 nm/s normally, can be changed in the parameters
+            ## in this function, the color lists may have glitched traces in them. We want this
+            red_list = []
+            orange_list = []
+            yellow_list = []
+            
+            for trace in stream:
+                max_val=stream.customMetadata[trace.id]['MAX']
+                max_val_over_trace=stream.customMetadata[trace.id]['Glitch_ABSMAX']
+                trace_name=trace.stats.station
+            
+                if max_val > 50000:  ## potential glitch
+                    if trace_name not in self.POTENTIAL_GLITCHES:
+                        self.POTENTIAL_GLITCHES.append(trace_name)
+                elif max_val > 10*threshold:  ## should be red
+                    if trace not in red_list:
+                        red_list.append(trace)
+                elif max_val > 2*threshold:  ## should be orange
+                    if trace not in orange_list:
+                        orange_list.append(trace)
+                elif max_val > threshold:  ## should be yellow
+                    if trace_name in self.POTENTIAL_GLITCHES:
+                        if max_val_over_trace < 2 * threshold:  ## potential glitch no longer glitching
+                            self.POTENTIAL_GLITCHES.remove(trace_name)
+                    if trace not in yellow_list:
+                        yellow_list.append(trace)
+                else:  ## should be gray
+                    if trace_name in self.POTENTIAL_GLITCHES:
+                        if max_val_over_trace < 200:  ## potential glitch no longer glitching
+                            self.POTENTIAL_GLITCHES.remove(trace_name)
+            stream.trim(starttime=self.start_time, endtime=self.stop_time)
+            np.set_printoptions(threshold=np.inf)
+            self.plot_lines(stream, red_list, orange_list, yellow_list)
+
+        except Exception as e:
+            logging.error(e)
+            pass
+        dt=UTCDateTime()-now
+        self.after(int(np.max(self.args.update_time-dt,0) * 1000), self.plot_graph)
+
+    def plot_lines(self, stream, red_list, orange_list, yellow_list):
+        
+        trace_ids=[trace.stats.station for trace in stream]
+        dead_ids=[key for key in self.pickets.keys() if key not in trace_ids]
+        
+        if self.send_epics:
+            for id_ in dead_ids:
+                i = self.pickets[id_]['index']
+                prefix=self.epics_prefix
+                starter = "STATION_0" + statInfo['index'] + "_"
+                subprocess.Popen(["caput", prefix + starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", prefix + starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", prefix + starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        stream.sort()
+        self.figure.clear()
+        fig = self.figure
+        # avoid the differing trace.processing attributes prohibiting to plot
+        # single traces of one id together.
+        for trace in stream:
+            trace.stats.processing = []
+        
+                
+        if len(self.POTENTIAL_GLITCHES) == 1:  ## if station is glitching, dont display EPICs variables
+            trace_name = self.POTENTIAL_GLITCHES[0]
+            i = self.pickets[trace_name]['index']
+            ## update AUX1 channel to hold picket number that is glitching
+            if self.send_epics:
+                subprocess.Popen(["caput", self.epics_prefix + "NETWORK_AUX1", f"{i}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif len(self.POTENTIAL_GLITCHES) > 1:  ## if multiple "glitches", they are probably not glitching (very large EQ??)
+            if self.send_epics:
+                subprocess.Popen(["caput", self.epics_prefix + "NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.POTENTIAL_GLITCHES.clear() ## since they aren't glitching, remove them from list
+        # Change equal_scale to False if auto-scaling should be turned off
+        stream.plot(fig=fig, method="fast", draw=False, equal_scale=False,
+                    size=(self.args.x_size, self.args.y_size), title="",
+                    color='Blue', tick_format=self.args.tick_format,
+                    number_of_ticks=self.args.time_tick_nb, min_bound=self.threshold)
+        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        bbox = dict(boxstyle="round", fc="w", alpha=0.8)
+        path_effects = [withStroke(linewidth=4, foreground="w")]
+        pad = 10
+        for ax in fig.axes[::2]:
+            if MATPLOTLIB_VERSION[0] >= 2:
+                ax.set_facecolor("0.8")
+            else:
+                ax.set_axis_bgcolor("0.8")
+        for ax in fig.axes:
+            ax.set_title("")
+            try:
+                text = ax.texts[0]
+            # we should always have a single text, which is the stream
+            # label of the axis, but catch index errors just in case
+            except IndexError:
+                pass
+            else:
+                text.set_fontsize(self.args.title_size)
+            xlabels = ax.get_xticklabels()
+            ylabels = ax.get_yticklabels()
+            plt.setp(ylabels, ha="left", path_effects=path_effects)
+            ax.yaxis.set_tick_params(pad=-pad)
+            # treatment for bottom axes:
+            if ax is fig.axes[-1]:
+                plt.setp(
+                    xlabels, va="bottom", size=self.args.time_legend_size, bbox=bbox)
+                if OBSPY_VERSION < [0, 10]:
+                    plt.setp(xlabels[:1], ha="left")
+                    plt.setp(xlabels[-1:], ha="right")
+                ax.xaxis.set_tick_params(pad=-pad)
+            # all other axes
+            else:
+                plt.setp(xlabels, visible=False)
+            locator = MaxNLocator(nbins=4, prune="both")
+            ax.yaxis.set_major_locator(locator)
+            ax.yaxis.grid(False)
+            ax.grid(True, axis="x")
+            if len(ax.lines) == 1:
+                ydata = ax.lines[0].get_ydata()
+                # if station has no data we add a dummy trace and we end up in
+                # a line with either 2 or 4 zeros (2 if dummy line is cut off
+                # at left edge of time axis)
+                if len(ydata) in [4, 2] and not ydata.any():  ## this is useless now
+                    if MATPLOTLIB_VERSION[0] >= 2:
+                        ax.set_facecolor("k") #Traces with no data turn black
+        if OBSPY_VERSION >= [0, 10]:
+            fig.axes[0].set_xlim(right=date2num(self.stop_time.datetime))
+            fig.axes[0].set_xlim(left=date2num(self.start_time.datetime))
+        if len(fig.axes) > 5:
+            bbox["alpha"] = 0.6
+        fig.text(0.99, 0.97, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                 ha="right", va="top", bbox=bbox, fontsize="medium")
+
+        ## update to remove glitches from red/orange/yellow lists
+        for trace_name in self.POTENTIAL_GLITCHES:
+            trace = name_get_trace(stream, trace_name)
+            if trace in red_list:
+                red_list.remove(trace)
+            elif trace in orange_list:
+                orange_list.remove(trace)
+            elif trace in yellow_list:
+                yellow_list.remove(trace)
+            else:
+                continue
+
+        ## change color of traces
+        for j in range(len(stream)):
+            trace = stream[j]  ## grab trace
+            if trace_get_name(trace) in self.POTENTIAL_GLITCHES:  ## display glitch in a different color
+                fig.axes[j].set_facecolor("#00FFFF")
+            elif trace in red_list:
+                fig.axes[j].set_facecolor("#FF2929")
+            elif trace in orange_list:
+                fig.axes[j].set_facecolor("orange")
+            elif trace in yellow_list:
+                fig.axes[j].set_facecolor("yellow")
+            else:
+                fig.axes[j].set_facecolor("#D3D3D3")
+
+        idx = -1
+        max_val = 0
+        for i in range(len(stream)):
+            trace = stream[i]
+            if trace_get_name(trace) in self.POTENTIAL_GLITCHES:  ## won't consider glitches info for NETWORK EPICs
+                continue
+            cur_data = trace.data[-trace.stats.numsamples:]
+            mn = min(cur_data)
+            mx = max(cur_data)
+            best = mn if abs(mn) > abs(mx) else mx
+            if abs(max_val) < abs(best):
+                idx = i
+                max_val = abs(best)
+
+        if self.send_epics:
+            for trace in stream:
+                i = self.pickets[trace.stats.station]['index']
+                prefix=self.epics_prefix
+                starter = "STATION_0" + statInfo['index'] + "_"
+                cur_data = trace.data[-trace.stats.numsamples:]
+                subprocess.Popen(["caput", prefix + starter + "MIN", f"{np.min(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
+                subprocess.Popen(["caput", prefix + starter + "MAX", f"{np.max(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
+                subprocess.Popen(["caput", prefix + starter + "MEAN", f"{np.mean(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different mean method
+            subprocess.Popen(["caput", prefix + "NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", prefix + "NETWORK_STATION_NUM", f"{self.pickets[stream[idx].stats.station]['index']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", prefix + "NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", prefix + "SERVER_GPS", tconvert("now").seconds], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        fig.canvas.draw()
+			                
+def trace_get_name(trace):
+    return trace.stats.station
+
+def name_get_trace(stream, name):
+    for trace in stream:
+        if trace_get_name(trace) == name:
+            return trace
+    return "No trace with that name"
+
+def _parse_time_with_suffix_to_seconds(timestring):
+    """
+    Parse a string to seconds as float.
+    If string can be directly converted to a float it is interpreted as
+    seconds. Otherwise the following suffixes can be appended, case
+    insensitive: "s" for seconds, "m" for minutes, "h" for hours, "d" for days.
+    >>> _parse_time_with_suffix_to_seconds("12.6")
+    12.6
+    >>> _parse_time_with_suffix_to_seconds("12.6s")
+    12.6
+    >>> _parse_time_with_suffix_to_minutes("12.6m")
+    756.0
+    >>> _parse_time_with_suffix_to_seconds("12.6h")
+    45360.0
+    :type timestring: str
+    :param timestring: "s" for seconds, "m" for minutes, "h" for hours, "d" for
+        days.
+    :rtype: float
+    """
+    try:
+        return float(timestring)
+    except:
+        timestring, suffix = timestring[:-1], timestring[-1].lower()
+        mult = {'s': 1.0, 'm': 60.0, 'h': 3600.0, 'd': 3600.0 * 24}[suffix]
+        return float(timestring) * mult
+
+
+def _parse_time_with_suffix_to_minutes(timestring):
+    try:
+        return float(timestring)
+    except:
+        seconds = _parse_time_with_suffix_to_seconds(timestring)
+    return seconds / 60.0
+
+
+def ID_Creator(s):
+    return int(''.join(str(format(ord(c), "x")) for c in s), 16)
+
+
+def Reverse_ID(n):
+    s = str(hex(n))
+    itr = len(s)
+    result = ""
+    for i in range(2, itr, 2):
+        result += chr(int(s[i:i+2], 16))
+    return result
+
+def initEpics(picket_dict, prefix): #TODO: Migrate this function to the EPICS server code
+
+    subprocess.Popen(["caput", prefix + "NETWORK_PEAK", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(["caput", prefix + "NETWORK_STATION_NUM", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(["caput", prefix + "NETWORK_STATION_NAME", ""], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(["caput", prefix + "NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(["caput", prefix + "NETWORK_AUX2", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(["caput", prefix + "NETWORK_AUX3", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    for statName, statInfo in picket_dict.items():
+                starter = "STATION_0" + statInfo['index'] + "_"
+                subprocess.Popen(["caput", prefix + starter + "LAT", str(statInfo['Latitude'])], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", prefix + starter + "LON", str(statInfo['Longitude'])], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", prefix + starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", prefix + starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", prefix + starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", prefix + starter + "ID", f"{ID_Creator(statName)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["caput", prefix + starter + "NAME", f"{statName}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                
+    subprocess.Popen(["caput", prefix + "SERVER_GPS", tconvert("now").seconds], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+#def updateEpics(picket_dict, prefix, updateMetadata):
+
+class PicketFence():
+    def __init__(self, picket_dict, myargs, epics_prefix):
+        self.args=myargs
+        self.pickets=picket_dict
+        self.stop_flag = False
+        self.leave = [False]
+        self.send_epics = self.args.send_epics
+        self.epics_prefix = epics_prefix
+
+    def run(self):
+        while self.leave[0]==False:
+            self.startnow = UTCDateTime()
+            self.stream = Stream()
+            self.events = Catalog()
+            self.lock = threading.Lock()
+    
+            if self.args.send_epics:  ## will initialize the EPICs variables
+                initEpics(self.pickets,self.epics_prefix)
+            
+            #create the strings to request stations from the server. They will be stored by server name
+            server_dict=dict()
+            for statName in self.pickets.keys():
+                server_name=self.pickets[statName]['PreferredServer'];
+                if server_name not in server_dict.keys(): #server not listed
+                    server_dict[server_name]=self.pickets[statName]['Channel']
+                else: #server has been listed
+                    server_dict[server_name]=server_dict[server_name]+', ' + self.pickets[statName]['Channel']              
+            self.server_dict=server_dict
+        
+            #Create a list of seedlink clients that will be watched
+            self.seedlink_clients=[]
+        
+            ii=0
+            for server_name in server_dict.keys():
+                self.seedlink_clients.append(SeedlinkUpdater(self.stream, myargs=self.args, lock=self.lock))
+                self.seedlink_clients[ii].slconn.set_sl_address(server_name)
+                self.seedlink_clients[ii].multiselect = server_dict[server_name]
+                self.seedlink_clients[ii].begin_time = (self.startnow - 500).format_seedlink() #TODO make it not 500 seconds flat
+                self.seedlink_clients[ii].initialize()
+                print('Downloading from server:  ', server_name)
+                print(server_dict[server_name])
+                ii+=1
+            
+            #Create the filtered stream and the plotter
+            self.filtStream=filteredStream(self.stream, myargs=self.args)  
+            self.master = SeedlinkPlotter(stream=self.filtStream, picket_dict=self.pickets, events=self.events, myargs=self.args, lock=self.lock, leave=self.leave) #, send_epics=args.epics)
+        
+            #Monitor the connections to seedlink
+            self.watchers=[threading.Thread(target=self.watcher, args=(client.run,), daemon=True) for client in self.seedlink_clients] ## threads to monitor the connection with IRIS
+        
+            for watching_thread in self.watchers:
+                watching_thread.start()
+            sleep(2)
+
+            self.master.mainloop()  ## main thread is now creating the display
+            self.leave=self.master.leave;
+            self.master.destroy()  ## mainloop was exited, now destroying master
+            print(self.leave[0])
+            if self.leave[0]:
+                return
+            for watching_thread in self.watchers:
+                watching_thread.join() ## ensures all threads are cleaned before restarting
+        
+    
+    def watcher(self,function):
+        thread = threading.Thread(target=function, daemon=True)
+        thread.start()
+        while True:
+            sleep(20)  ## possible that this pings too often. Maybe exponential with some MAX?? (ASK EDGARD)
+            if not thread.is_alive():  ## connection lost
+                ## these are probably unnecessary
+                self.stop_flag = True  ## killing thread (I am basically resetting the entire main function with this)
+                for client in self.seedlink_clients:
+                    client.stop_flag=True
+                thread.join()
+                self.master.quit()  ## letting main thread break out of mainloop
+                break  ## allowing watching_conn to leave scope (terminating)
