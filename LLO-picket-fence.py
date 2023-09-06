@@ -66,18 +66,18 @@ def main():
             "PreferredServer":"cwbpub.cr.usgs.gov:18000"
         },
         
-        "735B":{
-            "Latitude":28.8553,
-            "Longitude":-97.8082,
-            "Channel":"N4_735B:00HHZ",
+        # "735B":{
+        #     "Latitude":28.8553,
+        #     "Longitude":-97.8082,
+        #     "Channel":"N4_735B:00HHZ",
+        #     "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+        # }
+        "KVTX":{
+            "Latitude":27.546,
+            "Longitude":-97.893,
+            "Channel":"US_KVTX:00BHZ",
             "PreferredServer":"cwbpub.cr.usgs.gov:18000"
         }
-#        "KVTX":{
-#            "Latitude":27.546,
-#            "Longitude":-97.893,
-#            "Channel":"US_KVTX:00BHZ",
-#            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
-#        }
     }
 
     ii=1
