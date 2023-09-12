@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 from pcaspy import Driver, SimpleServer
-from gwpy.time import tconvert
 
 class myDriver(Driver):
     def  __init__(self):
@@ -82,8 +81,8 @@ def main():
     driver.setParam("NETWORK_AUX2", -1)
     driver.setParam("NETWORK_AUX3", -1)
     driver.setParam("NETWORK_STATION_NAME", "")
-    driver.setParam("SERVER_START_GPS", tconvert("now").seconds)
-    driver.setParam("SERVER_GPS", tconvert("now").seconds)
+    driver.setParam("SERVER_START_GPS", 0)
+    driver.setParam("SERVER_GPS", 0)
     
     # process CA transactions
     while True:
