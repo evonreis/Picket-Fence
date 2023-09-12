@@ -646,7 +646,8 @@ class SeedlinkPlotter(tkinter.Tk):
             subprocess.Popen(["caput", prefix + "NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.Popen(["caput", prefix + "NETWORK_STATION_NUM", f"{self.pickets[stream[idx].stats.station]['index']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.Popen(["caput", prefix + "NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').seconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').gpsSeconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", prefix + "SERVER_START_GPS", start_time], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         fig.canvas.draw()
 			                
@@ -692,8 +693,8 @@ def initEpics(picket_dict, prefix): #TODO: Migrate this function to the EPICS se
                 subprocess.Popen(["caput", prefix + starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 subprocess.Popen(["caput", prefix + starter + "ID", f"{ID_Creator(statName)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 subprocess.Popen(["caput", prefix + starter + "NAME", f"{statName}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)           
-    subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').seconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    subprocess.Popen(["caput", prefix + "SERVER_START_GPS", start_time, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').gpsSeconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(["caput", prefix + "SERVER_START_GPS", start_time], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
 
 #def updateEpics(picket_dict, prefix, updateMetadata):
@@ -711,7 +712,8 @@ class PicketFence():
         self.args.epics_prefix=epics_prefix
 
     def run(self):
-        start_time = f"{tconvert('now').seconds}"
+        global start_time
+        start_time = f"{tconvert('now').gpsSeconds}"
         while self.leave[0]==False:
             self.startnow = UTCDateTime()
             self.stream = Stream()
