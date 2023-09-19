@@ -70,6 +70,8 @@ from scipy import signal
 import logging
 import numpy as np
 
+last_process_gps = 0
+
 
 OBSPY_VERSION = [int(x) for x in OBSPY_VERSION.split(".")[:2]]
 # check obspy version and warn if it's below 0.10.0, which means that a memory
@@ -229,6 +231,8 @@ class SeedlinkUpdater(SLClient):
             self.stream.trim(starttime=UTCDateTime()-3600)
             for trace in self.stream:
                 trace.stats.processing = []
+        global last_process_gps
+        last_process_gps = tconvert('now').gpsSeconds
         return False
 
     def getTraceIDs(self):
@@ -635,6 +639,7 @@ class SeedlinkPlotter(tkinter.Tk):
                 idx = i
                 max_val = abs(best)
 
+        global last_process_gps
         if self.send_epics:
             prefix=self.epics_prefix
             for trace in stream:
@@ -648,6 +653,8 @@ class SeedlinkPlotter(tkinter.Tk):
             subprocess.Popen(["caput", prefix + "NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').gpsSeconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.Popen(["caput", prefix + "SERVER_START_GPS", start_time], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", prefix + "LAST_PROCESS_GPS", last_process_gps], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
 
         fig.canvas.draw()
 			                
