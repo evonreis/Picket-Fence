@@ -71,7 +71,7 @@ class myDriver(Driver):
             server_gps = self.getParam("SERVER_GPS")
             server_uptime_sec = int(server_gps - server_start_gps)
             self.setParam("SERVER_UPTIME_SEC", server_uptime_sec)
-            self.setParam("SERVER_UPTIME_STR", gps_to_str(server_uptime_sec))
+            self.setParam("SERVER_UPTIME_STR", delta_seconds_to_readable(server_uptime_sec))
             last_process_gps = self.getParam("LAST_PROCESS_GPS")
             self.setParam("LAST_PROCESS_STR", gps_to_str(last_process_gps))
             since_last_process_sec = int(now_gps - last_process_gps)
