@@ -71,6 +71,8 @@ import logging
 import numpy as np
 import json
 
+last_process_gps = 0
+
 OBSPY_VERSION = [int(x) for x in OBSPY_VERSION.split(".")[:2]]
 # check obspy version and warn if it's below 0.10.0, which means that a memory
 # leak is present in the used seedlink client (unless working on some master
@@ -229,6 +231,8 @@ class SeedlinkUpdater(SLClient):
             self.stream.trim(starttime=UTCDateTime()-3600)
             for trace in self.stream:
                 trace.stats.processing = []
+        global last_process_gps
+        last_process_gps = tconvert('now').gpsSeconds
         return False
 
     def getTraceIDs(self):
@@ -635,6 +639,7 @@ class SeedlinkPlotter(tkinter.Tk):
                 idx = i
                 max_val = abs(best)
 
+        global last_process_gps
         if self.send_epics:
             prefix=self.epics_prefix
             for trace in stream:
@@ -648,6 +653,8 @@ class SeedlinkPlotter(tkinter.Tk):
             subprocess.Popen(["caput", prefix + "NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').gpsSeconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.Popen(["caput", prefix + "SERVER_START_GPS", start_time], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["caput", prefix + "LAST_PROCESS_GPS", str(last_process_gps)], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
 
         fig.canvas.draw()
 			                
@@ -676,6 +683,7 @@ def Reverse_ID(n):
 start_time = "not started"
 
 def initEpics(picket_dict, prefix): #TODO: Migrate this function to the EPICS server code
+    global last_process_gps
 
     subprocess.Popen(["caput", prefix + "NETWORK_PEAK", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.Popen(["caput", prefix + "NETWORK_STATION_NUM", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -695,6 +703,8 @@ def initEpics(picket_dict, prefix): #TODO: Migrate this function to the EPICS se
                 subprocess.Popen(["caput", prefix + starter + "NAME", f"{statName}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)           
     subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').gpsSeconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.Popen(["caput", prefix + "SERVER_START_GPS", start_time], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(["caput", prefix + "LAST_PROCESS_GPS", str(last_process_gps)], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
     
 
 #def updateEpics(picket_dict, prefix, updateMetadata):
