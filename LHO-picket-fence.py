@@ -12,8 +12,8 @@ import logging
 
 
 def main():
-    parser = ArgumentParser(prog='seedlink_plotter',
-                            description='Plot a realtime seismogram of a station',
+    parser = ArgumentParser(prog='Picket_Fence',
+                            description='Plot seedlink seismic data for LIGO',
                             formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument('-v', '--verbose', default=False,
                         action="store_true", dest="verbose",

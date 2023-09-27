@@ -657,7 +657,7 @@ class SeedlinkPlotter(tkinter.Tk):
                              stderr=subprocess.DEVNULL)
 
         fig.canvas.draw()
-			                
+                            
 def trace_get_name(trace):
     return trace.stats.station
 
