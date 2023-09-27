@@ -34,58 +34,11 @@ def main():
     else:
         loglevel = logging.CRITICAL
     logging.basicConfig(level=loglevel)
-    pickets= {
-        "LRAL":{
-            "Latitude":33.0399,
-            "Longitude":-86.9978,
-            "Channel":"US_LRAL:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
-            },
-        "MIAR":{
-            "Latitude":34.5454,
-            "Longitude":-93.5765,
-            "Channel":"US_MIAR:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
-            },
-        "TEIG":{
-            "Latitude":20.226,
-            "Longitude":-88.276,
-            "Channel":"IU_TEIG:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
-        },
-        "HKT":{
-            "Latitude":29.965,
-            "Longitude":-95.838,
-            "Channel":"IU_HKT:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
-        },
-        "DWPF":{
-            "Latitude":28.11,
-            "Longitude":-81.433,
-            "Channel":"IU_DWPF:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
-        },
+    
+	#select the picket stations from the curated list of allowed stations - ELB 09/26/2023
+    pickets= ["LRAL", "MIAR", "TEIG", "HKT", "DWPF","KVTX"]
         
-        # "735B":{
-        #     "Latitude":28.8553,
-        #     "Longitude":-97.8082,
-        #     "Channel":"N4_735B:00HHZ",
-        #     "PreferredServer":"cwbpub.cr.usgs.gov:18000"
-        # }
-        "KVTX":{
-            "Latitude":27.546,
-            "Longitude":-97.893,
-            "Channel":"US_KVTX:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
-        }
-    }
-
-    ii=1
-    for station in pickets.keys():  
-        pickets[station]['index']=str(ii)
-        ii+=1
-        
-    pf=PicketFence(picket_dict=pickets,myargs=args,epics_prefix="L1:SEI-USGS_")
+    pf=PicketFence(picket_list=pickets,myargs=args,epics_prefix="L1:SEI-USGS_")
     pf.run()
 
 if __name__ == '__main__':

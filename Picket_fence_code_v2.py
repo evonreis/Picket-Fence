@@ -69,7 +69,7 @@ from scipy import signal
 
 import logging
 import numpy as np
-
+import json
 
 OBSPY_VERSION = [int(x) for x in OBSPY_VERSION.split(".")[:2]]
 # check obspy version and warn if it's below 0.10.0, which means that a memory
@@ -700,9 +700,9 @@ def initEpics(picket_dict, prefix): #TODO: Migrate this function to the EPICS se
 #def updateEpics(picket_dict, prefix, updateMetadata):
 
 class PicketFence():
-    def __init__(self, picket_dict, myargs, epics_prefix):
+    def __init__(self, picket_list, myargs, epics_prefix):
         self.args=myargs
-        self.pickets=picket_dict
+        self.pickets=self.load_pickets(picket_list)
         self.stop_flag = False
         self.leave = [False]
         self.send_epics = self.args.send_epics
@@ -710,7 +710,21 @@ class PicketFence():
         if self.send_epics:
             assert type(epics_prefix) == str , "the epics prefix should be a string"
         self.args.epics_prefix=epics_prefix
-
+        
+    def load_pickets(self, picket_list):
+        pickets=dict()
+        ii=1
+        with open('possible_stations.json','r') as f:
+            data=json.load(f)
+        for station in picket_list:
+            if station in data.keys():
+               pickets[station]=data[station]
+               pickets[station]['index']=str(ii)
+               ii+=1
+               continue
+            print(station+" is not on the list of curated picket stations")
+        return pickets
+        
     def run(self):
         global start_time
         start_time = f"{tconvert('now').gpsSeconds}"
