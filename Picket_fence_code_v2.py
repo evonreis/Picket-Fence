@@ -257,7 +257,7 @@ class SeedlinkUpdater(SLClient):
         return ids
 class picketFenceArguments():
     def __init__(self, stream_time=3600, backtrace_time=15*60, x_position=0, y_position=0, x_size=800, y_size=600, title_size=10, time_legend_size=10,
-    tick_format='%H:%M:%S',time_tick_nb=5,threshold=500,lookback=120,update_time=2,fullscreen=False,verbose=False,send_epics=False,epics_prefix=None):
+    tick_format='%H:%M:%S',time_tick_nb=5,threshold=500,lookback=120,update_time=1,fullscreen=False,verbose=False,send_epics=False,epics_prefix=None):
     
         #Plot format properties
         self.x_position=x_position              # horizontal position of the graph
@@ -357,6 +357,12 @@ class filteredStream(Stream):
                     T *= dt
                     tout, yout, xout =signal.lsim(self.filter, newTrace.data, T, X0=xin)
                     newTrace.data = yout
+                    
+                    #Update the trace metadata
+                    self.customMetadata[trace.id]['MAX']=np.max(newTrace.data)
+                    self.customMetadata[trace.id]['MIN']=np.min(newTrace.data)
+                    self.customMetadata[trace.id]['MEAN']=np.mean(newTrace.data)
+                    
                     self.customMetadata[newTrace.id]['filterState']=xout[-1]
                     self.customMetadata[newTrace.id]['endtime']=newTrace.stats.endtime
                     self.append(newTrace)
@@ -368,30 +374,29 @@ class filteredStream(Stream):
                 self.append(newTrace)
                 
         #Merge and clean the trace information
-        self.merge(-1)
-        self.updateMetadata()
-        self.trim(UTCDateTime()-2*self.args.backtrace_time) #TODO: make this trim not arbitrary
-        for trace in self.traces:
-            trace.stats.processing = []
+        self.mergeAndCleanMetadata()
             
     #Function that returns the ids currently in the filtered stream        
     def getTraceIDs(self):
         return [tr.id for tr in self.traces]
     
     #This function keeps track of metadata for the traces over the last 'lookback' seconds
-    def updateMetadata(self):
-        #Grab statistics for the traces in the last 'lookback' seconds
+    def mergeAndCleanMetadata(self):
+        self.merge(-1)
+        #Trim and check for glitches
+        self.trim(UTCDateTime()-2*self.args.backtrace_time) #TODO: make this trim not arbitrary
         for trace in self.traces:
-            dummyTrace=trace.slice(starttime=UTCDateTime()-self.args.lookback)
-            if len(dummyTrace.data)!=0:
-                self.customMetadata[trace.id]['MAX']=np.max(dummyTrace.data)
-                self.customMetadata[trace.id]['MIN']=np.min(dummyTrace.data)
-                self.customMetadata[trace.id]['MEAN']=np.mean(dummyTrace.data)
-                
-            #check for glitches too
+            trace.stats.processing = []         
+            #Check for Glitches
             dummyTrace=trace.slice(starttime=UTCDateTime()-self.args.backtrace_time)
             if len(dummyTrace.data)!=0:
-                self.customMetadata[trace.id]['Glitch_ABSMAX']=dummyTrace.max()              
+                self.customMetadata[trace.id]['Glitch_ABSMAX']=dummyTrace.max()
+            else: #We don't have recent data, reset all values to 0 and wait for more data
+                self.customMetadata[trace.id]['MAX']=0
+                self.customMetadata[trace.id]['MIN']=0
+                self.customMetadata[trace.id]['MEAN']=0
+                self.customMetadata[trace.id]['Glitch_ABSMAX']=0
+                
 class SeedlinkPlotter(tkinter.Tk):
     """
     This module plots realtime seismic data from a Seedlink server
