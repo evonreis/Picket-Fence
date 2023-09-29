@@ -337,7 +337,11 @@ class filteredStream(Stream):
             trace.trim(starttime=trace.stats.starttime+self.filterTransientTime) #TODO: Change this to actually be useful, do we want to chop 3 minutes of data?
             self.customMetadata[trace.id]['filterState']=xout[-1]
             self.customMetadata[trace.id]['endtime']=trace.stats.endtime
-    
+            self.customMetadata[trace.id]['MAX']=np.max(trace.data)
+            self.customMetadata[trace.id]['MIN']=np.min(trace.data)
+            self.customMetadata[trace.id]['MEAN']=np.mean(trace.data)
+            self.customMetadata[trace.id]['Glitch_ABSMAX']=0
+            
     #Function that updates the filtered Stream with new data from the rawStream that is connected to it
     def CollectAndAnalyze(self):
         #with self.lock:
@@ -361,8 +365,7 @@ class filteredStream(Stream):
                     #Update the trace metadata
                     self.customMetadata[trace.id]['MAX']=np.max(newTrace.data)
                     self.customMetadata[trace.id]['MIN']=np.min(newTrace.data)
-                    self.customMetadata[trace.id]['MEAN']=np.mean(newTrace.data)
-                    
+                    self.customMetadata[trace.id]['MEAN']=np.mean(newTrace.data)                    
                     self.customMetadata[newTrace.id]['filterState']=xout[-1]
                     self.customMetadata[newTrace.id]['endtime']=newTrace.stats.endtime
                     self.append(newTrace)
@@ -506,6 +509,10 @@ class SeedlinkPlotter(tkinter.Tk):
                             self.POTENTIAL_GLITCHES.remove(trace_name)
             stream.trim(starttime=self.start_time, endtime=self.stop_time)
             np.set_printoptions(threshold=np.inf)
+            
+            if self.send_epics:
+                self.post_EPICS(stream)
+                
             self.plot_lines(stream, red_list, orange_list, yellow_list)
 
         except Exception as e:
@@ -513,19 +520,39 @@ class SeedlinkPlotter(tkinter.Tk):
             pass
         dt=UTCDateTime()-now
         self.after(int(np.max(self.args.update_time-dt,0) * 1000), self.plot_graph)
+    
+    def post_EPICS(self,stream):
+        #Find the max of all traces using the stream metadata
+        max_station_name=""
+        max_val = 0
+        for trace in stream:
+            if trace_get_name(trace) in self.POTENTIAL_GLITCHES:  ## won't consider glitches info for NETWORK EPICS
+                continue
+            best =np.max([abs(stream.customMetadata[trace.id]['MAX']),abs(stream.customMetadata[trace.id]['MIN'])])
+            if max_val < best:
+                max_station_name = "" + trace.stats.station
+                max_val = best
+        global last_process_gps
+        
+        prefix=self.epics_prefix
+        
+        for trace in stream:
+            starter = "STATION_0" + self.pickets[trace.stats.station]['index'] + "_"
+            subprocess.Popen(["caput", prefix + starter + "MIN", f"{stream.customMetadata[trace.id]['MIN']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
+            subprocess.Popen(["caput", prefix + starter + "MAX", f"{stream.customMetadata[trace.id]['MAX']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
+            subprocess.Popen(["caput", prefix + starter + "MEAN", f"{stream.customMetadata[trace.id]['MEAN']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different mean method
 
+        subprocess.Popen(["caput", prefix + "NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", prefix + "NETWORK_STATION_NUM", f"{self.pickets[max_station_name]['index']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", prefix + "NETWORK_STATION_NAME", f"{max_station_name}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').gpsSeconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", prefix + "SERVER_START_GPS", start_time], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["caput", prefix + "LAST_PROCESS_GPS", str(last_process_gps)], stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL)
+        return
+    
     def plot_lines(self, stream, red_list, orange_list, yellow_list):
         
-        trace_ids=[trace.stats.station for trace in stream]
-        dead_ids=[key for key in self.pickets.keys() if key not in trace_ids]
-        
-        if self.send_epics:
-            prefix=self.epics_prefix
-            for id_ in dead_ids:
-                starter = "STATION_0" + self.pickets[id_]['index'] + "_"
-                subprocess.Popen(["caput", prefix + starter + "MIN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                subprocess.Popen(["caput", prefix + starter + "MAX", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                subprocess.Popen(["caput", prefix + starter + "MEAN", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         stream.sort()
         self.figure.clear()
         fig = self.figure
@@ -629,37 +656,6 @@ class SeedlinkPlotter(tkinter.Tk):
                 fig.axes[j].set_facecolor("yellow")
             else:
                 fig.axes[j].set_facecolor("#D3D3D3")
-
-        idx = -1
-        max_val = 0
-        for i in range(len(stream)):
-            trace = stream[i]
-            if trace_get_name(trace) in self.POTENTIAL_GLITCHES:  ## won't consider glitches info for NETWORK EPICs
-                continue
-            cur_data = trace.data[-trace.stats.numsamples:]
-            mn = min(cur_data)
-            mx = max(cur_data)
-            best = mn if abs(mn) > abs(mx) else mx
-            if abs(max_val) < abs(best):
-                idx = i
-                max_val = abs(best)
-
-        global last_process_gps
-        if self.send_epics:
-            prefix=self.epics_prefix
-            for trace in stream:
-                starter = "STATION_0" + self.pickets[trace.stats.station]['index'] + "_"
-                cur_data = trace.data[-trace.stats.numsamples:]
-                subprocess.Popen(["caput", prefix + starter + "MIN", f"{np.min(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
-                subprocess.Popen(["caput", prefix + starter + "MAX", f"{np.max(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
-                subprocess.Popen(["caput", prefix + starter + "MEAN", f"{np.mean(cur_data)}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different mean method
-            subprocess.Popen(["caput", prefix + "NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", prefix + "NETWORK_STATION_NUM", f"{self.pickets[stream[idx].stats.station]['index']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", prefix + "NETWORK_STATION_NAME", f"{stream[idx].stats.station}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').gpsSeconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", prefix + "SERVER_START_GPS", start_time], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen(["caput", prefix + "LAST_PROCESS_GPS", str(last_process_gps)], stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
 
         fig.canvas.draw()
                             
