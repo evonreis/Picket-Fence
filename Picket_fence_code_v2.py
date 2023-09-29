@@ -328,13 +328,16 @@ class filteredStream(Stream):
             
     #Function that applies a lowpass filter to an initial portion of data for which we have no internal filter states   
     def FirstLowpass(self,trace):
+        dt = trace.stats.delta
+        if (len(trace.data)*dt)>self.filterTransientTime:
             self.HanningWindow(trace)
-            dt = trace.stats.delta
             T=np.arange(0.0, len(trace.data))
             T *= dt
             tout, yout, xout =signal.lsim(self.filter, trace.data, T, X0=None)
             trace.data = yout
             trace.trim(starttime=trace.stats.starttime+self.filterTransientTime) #TODO: Change this to actually be useful, do we want to chop 3 minutes of data?
+            
+            #Initialize the metadata
             self.customMetadata[trace.id]['filterState']=xout[-1]
             self.customMetadata[trace.id]['endtime']=trace.stats.endtime
             self.customMetadata[trace.id]['MAX']=np.max(trace.data)
