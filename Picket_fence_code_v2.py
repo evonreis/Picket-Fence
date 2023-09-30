@@ -329,27 +329,26 @@ class filteredStream(Stream):
     #Function that applies a lowpass filter to an initial portion of data for which we have no internal filter states   
     def FirstLowpass(self,trace):
         dt = trace.stats.delta
-        if (len(trace.data)*dt)>self.filterTransientTime:
-            self.HanningWindow(trace)
-            T=np.arange(0.0, len(trace.data))
-            T *= dt
-            tout, yout, xout =signal.lsim(self.filter, trace.data, T, X0=None)
-            trace.data = yout
-            trace.trim(starttime=trace.stats.starttime+self.filterTransientTime) #TODO: Change this to actually be useful, do we want to chop 3 minutes of data?
-            
-            #Initialize the metadata
+        self.HanningWindow(trace)
+        T=np.arange(0.0, len(trace.data))
+        T *= dt
+        tout, yout, xout =signal.lsim(self.filter, trace.data, T, X0=None)
+        trace.data = yout
+        trace.trim(starttime=trace.stats.starttime+self.filterTransientTime) #TODO: Change this to actually be useful, do we want to chop 3 minutes of data?
+        #Initialize the metadata
+        if trace.data.size>0:
             self.customMetadata[trace.id]['filterState']=xout[-1]
             self.customMetadata[trace.id]['endtime']=trace.stats.endtime
+            self.customMetadata[trace.id]['Glitch_ABSMAX']=0
             self.customMetadata[trace.id]['MAX']=np.max(trace.data)
             self.customMetadata[trace.id]['MIN']=np.min(trace.data)
             self.customMetadata[trace.id]['MEAN']=np.mean(trace.data)
-            self.customMetadata[trace.id]['Glitch_ABSMAX']=0
             
     #Function that updates the filtered Stream with new data from the rawStream that is connected to it
     def CollectAndAnalyze(self):
         #with self.lock:
         for trace in self.rawStream.traces:
-            if trace.id in self.getTraceIDs(): #if we have metadata for the trace TODO: change for 'if we have the trace in the filtered stream'
+            if trace.id in self.getTraceIDs(): #if we have the trace in the filtered stream
                 oldEndtime=self.customMetadata[trace.id]['endtime']
                 
                 #Trim traces to isolate the new data
@@ -443,7 +442,9 @@ class SeedlinkPlotter(tkinter.Tk):
         self.leave=leave
         self.stream = stream
         self.events = events
-        self.threshold = args.threshold
+        self.threshold = args.threshold #TODO: Make this be deprecated
+        self.threshold_color_state=self._define_thresholds_and_colors()
+        self.tracePlotSpecs=dict()
         self.lookback = args.lookback
         self.color = ('#000000', '#e50000', '#0000e5', '#448630')  ## Regular colors: Black, Red, Blue, Green
         self.POTENTIAL_GLITCHES = []
@@ -466,12 +467,20 @@ class SeedlinkPlotter(tkinter.Tk):
         g = self.geometry()
         self.geometry(self._geometry)
         self._geometry = g
-
+        
+    def _define_thresholds_and_colors(self):
+        threshold_color_state=[
+            (5000, "#FF2929","RED"),
+            (1000, "orange","ORANGE"),
+            (500, "yellow" ,"YELLOW"),
+            (0,"#D3D3D3","NORMAL"),
+            ]        
+        return(sorted(threshold_color_state,key=lambda tup: tup[0],reverse=True))
+    
     def plot_graph(self):
         now = UTCDateTime()
         self.start_time = now - self.backtrace
         self.stop_time = now
-
         with self.lock:
             self.stream.CollectAndAnalyze()
             stream=self.stream.copy()
@@ -479,44 +488,35 @@ class SeedlinkPlotter(tkinter.Tk):
             logging.info(str(stream.split()))
             if not stream:
                 raise Exception("Empty stream for plotting")
-                
-            threshold = self.threshold # 500 nm/s normally, can be changed in the parameters
-            ## in this function, the color lists may have glitched traces in them. We want this
-            red_list = []
-            orange_list = []
-            yellow_list = []
-            
+#####                
             for trace in stream:
-                max_val=stream.customMetadata[trace.id]['MAX']
+                max_val=np.max([abs(stream.customMetadata[trace.id]['MAX']),abs(stream.customMetadata[trace.id]['MIN'])])
                 max_val_over_trace=stream.customMetadata[trace.id]['Glitch_ABSMAX']
                 trace_name=trace.stats.station
-            
+                if trace.id not in self.tracePlotSpecs:
+                    self.tracePlotSpecs[trace.id]=dict()
+                    
+                for (threshold, color, state) in self.threshold_color_state:
+                    if max_val < threshold:
+                        continue
+                    self.tracePlotSpecs[trace.id]["COLOR"]=color
+                    self.tracePlotSpecs[trace.id]["STATE"]=state
+                    break
                 if max_val > 50000:  ## potential glitch
                     if trace_name not in self.POTENTIAL_GLITCHES:
                         self.POTENTIAL_GLITCHES.append(trace_name)
-                elif max_val > 10*threshold:  ## should be red
-                    if trace not in red_list:
-                        red_list.append(trace)
-                elif max_val > 2*threshold:  ## should be orange
-                    if trace not in orange_list:
-                        orange_list.append(trace)
-                elif max_val > threshold:  ## should be yellow
-                    if trace_name in self.POTENTIAL_GLITCHES:
-                        if max_val_over_trace < 2 * threshold:  ## potential glitch no longer glitching
-                            self.POTENTIAL_GLITCHES.remove(trace_name)
-                    if trace not in yellow_list:
-                        yellow_list.append(trace)
                 else:  ## should be gray
                     if trace_name in self.POTENTIAL_GLITCHES:
                         if max_val_over_trace < 200:  ## potential glitch no longer glitching
                             self.POTENTIAL_GLITCHES.remove(trace_name)
+                            
             stream.trim(starttime=self.start_time, endtime=self.stop_time)
             np.set_printoptions(threshold=np.inf)
-            
+#####            
             if self.send_epics:
                 self.post_EPICS(stream)
                 
-            self.plot_lines(stream, red_list, orange_list, yellow_list)
+            self.plot_lines(stream)
 
         except Exception as e:
             logging.error(e)
@@ -554,17 +554,17 @@ class SeedlinkPlotter(tkinter.Tk):
                           stderr=subprocess.DEVNULL)
         return
     
-    def plot_lines(self, stream, red_list, orange_list, yellow_list):
+    def plot_lines(self, stream):
         
         stream.sort()
         self.figure.clear()
         fig = self.figure
+
         # avoid the differing trace.processing attributes prohibiting to plot
         # single traces of one id together.
         for trace in stream:
             trace.stats.processing = []
-        
-                
+#####                     
         if len(self.POTENTIAL_GLITCHES) == 1:  ## if station is glitching, dont display EPICs variables
             trace_name = self.POTENTIAL_GLITCHES[0]
             i = self.pickets[trace_name]['index']
@@ -575,6 +575,8 @@ class SeedlinkPlotter(tkinter.Tk):
             if self.send_epics:
                 subprocess.Popen(["caput", self.epics_prefix + "NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.POTENTIAL_GLITCHES.clear() ## since they aren't glitching, remove them from list
+#####            
+            
         # Change equal_scale to False if auto-scaling should be turned off
         stream.plot(fig=fig, method="fast", draw=False, equal_scale=False,
                     size=(self.args.x_size, self.args.y_size), title="",
@@ -634,32 +636,14 @@ class SeedlinkPlotter(tkinter.Tk):
         fig.text(0.99, 0.97, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
                  ha="right", va="top", bbox=bbox, fontsize="medium")
 
-        ## update to remove glitches from red/orange/yellow lists
-        for trace_name in self.POTENTIAL_GLITCHES:
-            trace = name_get_trace(stream, trace_name)
-            if trace in red_list:
-                red_list.remove(trace)
-            elif trace in orange_list:
-                orange_list.remove(trace)
-            elif trace in yellow_list:
-                yellow_list.remove(trace)
-            else:
-                continue
-
         ## change color of traces
         for j in range(len(stream)):
             trace = stream[j]  ## grab trace
+            fig.axes[j].set_facecolor(self.tracePlotSpecs[trace.id]["COLOR"])
             if trace_get_name(trace) in self.POTENTIAL_GLITCHES:  ## display glitch in a different color
                 fig.axes[j].set_facecolor("#00FFFF")
-            elif trace in red_list:
-                fig.axes[j].set_facecolor("#FF2929")
-            elif trace in orange_list:
-                fig.axes[j].set_facecolor("orange")
-            elif trace in yellow_list:
-                fig.axes[j].set_facecolor("yellow")
-            else:
-                fig.axes[j].set_facecolor("#D3D3D3")
 
+#####
         fig.canvas.draw()
                             
 def trace_get_name(trace):
@@ -686,7 +670,7 @@ def Reverse_ID(n):
 
 start_time = "not started"
 
-def initEpics(picket_dict, prefix): #TODO: Migrate this function to the EPICS server code
+def initEpics(picket_dict, prefix):
     global last_process_gps
 
     subprocess.Popen(["caput", prefix + "NETWORK_PEAK", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -769,7 +753,7 @@ class PicketFence():
                 self.seedlink_clients.append(SeedlinkUpdater(self.stream, myargs=self.args, lock=self.lock))
                 self.seedlink_clients[ii].slconn.set_sl_address(server_name)
                 self.seedlink_clients[ii].multiselect = server_dict[server_name]
-                self.seedlink_clients[ii].begin_time = (self.startnow - 2000).format_seedlink() #TODO make it not 2000 seconds flat
+                self.seedlink_clients[ii].begin_time = (self.startnow - 1500).format_seedlink() #TODO make it not 2000 seconds flat
                 self.seedlink_clients[ii].initialize()
                 print('Downloading from server:  ', server_name)
                 print(server_dict[server_name])
@@ -802,6 +786,7 @@ class PicketFence():
             sleep(20)  ## possible that this pings too often. Maybe exponential with some MAX?? (ASK EDGARD)
             if not thread.is_alive():  ## connection lost
                 ## these are probably unnecessary
+                print("Picket fence script is dead. Attempting a restart")
                 self.stop_flag = True  ## killing thread (I am basically resetting the entire main function with this)
                 for client in self.seedlink_clients:
                     client.stop_flag=True
