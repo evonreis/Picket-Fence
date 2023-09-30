@@ -257,7 +257,7 @@ class SeedlinkUpdater(SLClient):
         return ids
 class picketFenceArguments():
     def __init__(self, stream_time=3600, backtrace_time=15*60, x_position=0, y_position=0, x_size=800, y_size=600, title_size=10, time_legend_size=10,
-    tick_format='%H:%M:%S',time_tick_nb=5,threshold=500,lookback=120,update_time=1,fullscreen=False,verbose=False,send_epics=False,epics_prefix=None):
+    tick_format='%H:%M:%S',time_tick_nb=5,threshold=500,lookback=120,update_time=1, min_scale=500, fullscreen=False,verbose=False,send_epics=False,epics_prefix=None):
     
         #Plot format properties
         self.x_position=x_position              # horizontal position of the graph
@@ -269,6 +269,7 @@ class picketFenceArguments():
         self.tick_format=tick_format            # time format for the time ticks
         self.time_tick_nb=time_tick_nb          # number of time ticks
         self.fullscreen=fullscreen              # True toggles the fullscreen display
+        self.min_scale=250                      # Minimum scale for the plots [nm/s]
 
         #Data display properties
         self.backtrace_time=backtrace_time      # time (in seconds) that will be displayed in plots
@@ -442,12 +443,15 @@ class SeedlinkPlotter(tkinter.Tk):
         self.leave=leave
         self.stream = stream
         self.events = events
-        self.threshold = args.threshold #TODO: Make this be deprecated
         self.threshold_color_state=self._define_thresholds_and_colors()
+        self.threshold=self.args.threshold
         self.tracePlotSpecs=dict()
         self.lookback = args.lookback
-        self.color = ('#000000', '#e50000', '#0000e5', '#448630')  ## Regular colors: Black, Red, Blue, Green
         self.POTENTIAL_GLITCHES = []
+        self.glitch_threshold=50000 #[nm/s]
+        self.unglitch_threshold=1000 #[nm/s]
+        self.glitch_cooldown_time=5*60 #[s] 5 Minutes total
+        self.large_EQ_cooldown=0 #[s] Current glitch cooldown, it prevents stations from glitching it there's a large EQ
         self.plot_graph()
 
     def _close_window(self):
@@ -488,8 +492,11 @@ class SeedlinkPlotter(tkinter.Tk):
             logging.info(str(stream.split()))
             if not stream:
                 raise Exception("Empty stream for plotting")
-#####                
+             
+        ### Handle colors and glitches     
+            self.large_EQ_cooldown=max([0,self.large_EQ_cooldown-self.args.update_time]) #Decrease large EQ timer (assumes we are updating on time)              
             for trace in stream:
+            
                 max_val=np.max([abs(stream.customMetadata[trace.id]['MAX']),abs(stream.customMetadata[trace.id]['MIN'])])
                 max_val_over_trace=stream.customMetadata[trace.id]['Glitch_ABSMAX']
                 trace_name=trace.stats.station
@@ -502,29 +509,38 @@ class SeedlinkPlotter(tkinter.Tk):
                     self.tracePlotSpecs[trace.id]["COLOR"]=color
                     self.tracePlotSpecs[trace.id]["STATE"]=state
                     break
-                if max_val > 50000:  ## potential glitch
+                
+                if max_val > self.glitch_threshold and self.large_EQ_cooldown==0:  ## potential glitch and no large EQ
                     if trace_name not in self.POTENTIAL_GLITCHES:
                         self.POTENTIAL_GLITCHES.append(trace_name)
-                else:  ## should be gray
+                else:
                     if trace_name in self.POTENTIAL_GLITCHES:
-                        if max_val_over_trace < 200:  ## potential glitch no longer glitching
+                        if max_val_over_trace < self.unglitch_threshold:  ## potential glitch no longer glitching
                             self.POTENTIAL_GLITCHES.remove(trace_name)
-                            
+                                    
+            if len(self.POTENTIAL_GLITCHES) > 1:  ## if multiple "glitches", they are probably not glitching (very large EQ??)
+                self.POTENTIAL_GLITCHES.clear() ## since they aren't glitching, remove them from list
+                self.large_EQ_cooldown=self.glitch_cooldown_time
+                                      
             stream.trim(starttime=self.start_time, endtime=self.stop_time)
             np.set_printoptions(threshold=np.inf)
-#####            
+            
+        ### Handle EPICS after Glitches                  
             if self.send_epics:
                 self.post_EPICS(stream)
                 
+        ### PLOT      
             self.plot_lines(stream)
 
         except Exception as e:
             logging.error(e)
             pass
         dt=UTCDateTime()-now
-        self.after(int(np.max(self.args.update_time-dt,0) * 1000), self.plot_graph)
+        self.after(int(np.max([self.args.update_time-dt,0]) * 1000), self.plot_graph)
     
     def post_EPICS(self,stream):
+        #TODO: Handle glitches independent of posting the EPICS
+        
         #Find the max of all traces using the stream metadata
         max_station_name=""
         max_val = 0
@@ -539,19 +555,35 @@ class SeedlinkPlotter(tkinter.Tk):
         
         prefix=self.epics_prefix
         
+        #Picket Station Channels
         for trace in stream:
             starter = "STATION_0" + self.pickets[trace.stats.station]['index'] + "_"
             subprocess.Popen(["caput", prefix + starter + "MIN", f"{stream.customMetadata[trace.id]['MIN']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different min method
             subprocess.Popen(["caput", prefix + starter + "MAX", f"{stream.customMetadata[trace.id]['MAX']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different max method
             subprocess.Popen(["caput", prefix + starter + "MEAN", f"{stream.customMetadata[trace.id]['MEAN']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  ## try different mean method
-
+        #Global Picket Network Channels
         subprocess.Popen(["caput", prefix + "NETWORK_PEAK", f"{max_val}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.Popen(["caput", prefix + "NETWORK_STATION_NUM", f"{self.pickets[max_station_name]['index']}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.Popen(["caput", prefix + "NETWORK_STATION_NAME", f"{max_station_name}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        #Diagnostic Channels
         subprocess.Popen(["caput", prefix + "SERVER_GPS", f"{tconvert('now').gpsSeconds}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.Popen(["caput", prefix + "SERVER_START_GPS", start_time], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.Popen(["caput", prefix + "LAST_PROCESS_GPS", str(last_process_gps)], stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL)
+        #AUX Channels
+        
+        ## update AUX1 channel to hold picket number that is glitching
+        if len(self.POTENTIAL_GLITCHES) == 1:  ## if station is glitching, dont display EPICs variables
+            trace_name = self.POTENTIAL_GLITCHES[0]
+            i = self.pickets[trace_name]['index']
+            subprocess.Popen(["caput", self.epics_prefix + "NETWORK_AUX1", f"{i}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen(["caput", self.epics_prefix + "NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+        #subprocess.Popen(["caput", self.epics_prefix + "NETWORK_AUX2", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        #subprocess.Popen(["caput", self.epics_prefix + "NETWORK_AUX3", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
         return
     
     def plot_lines(self, stream):
@@ -563,25 +595,13 @@ class SeedlinkPlotter(tkinter.Tk):
         # avoid the differing trace.processing attributes prohibiting to plot
         # single traces of one id together.
         for trace in stream:
-            trace.stats.processing = []
-#####                     
-        if len(self.POTENTIAL_GLITCHES) == 1:  ## if station is glitching, dont display EPICs variables
-            trace_name = self.POTENTIAL_GLITCHES[0]
-            i = self.pickets[trace_name]['index']
-            ## update AUX1 channel to hold picket number that is glitching
-            if self.send_epics:
-                subprocess.Popen(["caput", self.epics_prefix + "NETWORK_AUX1", f"{i}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        elif len(self.POTENTIAL_GLITCHES) > 1:  ## if multiple "glitches", they are probably not glitching (very large EQ??)
-            if self.send_epics:
-                subprocess.Popen(["caput", self.epics_prefix + "NETWORK_AUX1", "-1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            self.POTENTIAL_GLITCHES.clear() ## since they aren't glitching, remove them from list
-#####            
+            trace.stats.processing = []     
             
         # Change equal_scale to False if auto-scaling should be turned off
         stream.plot(fig=fig, method="fast", draw=False, equal_scale=False,
                     size=(self.args.x_size, self.args.y_size), title="",
                     color='Blue', tick_format=self.args.tick_format,
-                    number_of_ticks=self.args.time_tick_nb, min_bound=self.threshold)
+                    number_of_ticks=self.args.time_tick_nb)
         fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
         bbox = dict(boxstyle="round", fc="w", alpha=0.8)
         path_effects = [withStroke(linewidth=4, foreground="w")]
@@ -605,6 +625,10 @@ class SeedlinkPlotter(tkinter.Tk):
             ylabels = ax.get_yticklabels()
             plt.setp(ylabels, ha="left", path_effects=path_effects)
             ax.yaxis.set_tick_params(pad=-pad)
+            ylims_=np.array(ax.get_ylim())
+            ylims_[0] = np.clip(ylims_[0], None, -self.args.min_scale)  ## changes made to fix min scaling
+            ylims_[1] = np.clip(ylims_[1], self.args.min_scale, None)   ## changes made to fix max scaling
+            ax.set_ylim(*ylims_)
             # treatment for bottom axes:
             if ax is fig.axes[-1]:
                 plt.setp(
@@ -618,7 +642,7 @@ class SeedlinkPlotter(tkinter.Tk):
                 plt.setp(xlabels, visible=False)
             locator = MaxNLocator(nbins=4, prune="both")
             ax.yaxis.set_major_locator(locator)
-            ax.yaxis.grid(False)
+            ax.yaxis.grid(True)
             ax.grid(True, axis="x")
             if len(ax.lines) == 1:
                 ydata = ax.lines[0].get_ydata()
