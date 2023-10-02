@@ -39,18 +39,18 @@ import matplotlib
 matplotlib.use("TkAgg")
 matplotlib.rc('figure.subplot', hspace=0)
 matplotlib.rc('font', family="monospace")
-try:
-    # Py3
-    import tkinter
-except ImportError:
-    # Py2
-    import Tkinter as tkinter
+
+import tkinter
+from tkinter import ttk
+
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
 from matplotlib.patheffects import withStroke
 from matplotlib.dates import date2num
 import matplotlib.pyplot as plt
+
+# OBSPY imports
 from obspy import Stream, Trace
 from obspy import __version__ as OBSPY_VERSION
 from obspy.core import UTCDateTime
@@ -58,6 +58,7 @@ from obspy.core.event import Catalog
 from obspy.core.util import MATPLOTLIB_VERSION
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
+from picketMapTools import picketMap
 import threading
 import os
 from time import sleep
@@ -722,7 +723,7 @@ def initEpics(picket_dict, prefix):
 #def updateEpics(picket_dict, prefix, updateMetadata):
 
 class PicketFence():
-    def __init__(self, picket_list, myargs, epics_prefix):
+    def __init__(self, picket_list, myargs, epics_prefix,observatory_info=None):
         self.args=myargs
         self.pickets=self.load_pickets(picket_list)
         self.stop_flag = False
@@ -732,6 +733,7 @@ class PicketFence():
         if self.send_epics:
             assert type(epics_prefix) == str , "the epics prefix should be a string"
         self.args.epics_prefix=epics_prefix
+        self.observatory_info=observatory_info
         
     def load_pickets(self, picket_list):
         pickets=dict()
@@ -786,7 +788,10 @@ class PicketFence():
             #Create the filtered stream and the plotter
             self.filtStream=filteredStream(self.stream, myargs=self.args)  
             self.master = SeedlinkPlotter(stream=self.filtStream, picket_dict=self.pickets, events=self.events, myargs=self.args, lock=self.lock, leave=self.leave) #, send_epics=args.epics)
-        
+            self.picketMap=picketMap(picket_dict=self.pickets,central_station=self.observatory_info)
+            
+            demo=ttk.Button(self.master, text="Map",command=lambda: self.picketMap.generate_plot())
+            demo.pack()
             #Monitor the connections to seedlink
             self.watchers=[threading.Thread(target=self.watcher, args=(client.run,), daemon=True) for client in self.seedlink_clients] ## threads to monitor the connection with IRIS
         

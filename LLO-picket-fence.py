@@ -37,8 +37,18 @@ def main():
     
 	#select the picket stations from the curated list of allowed stations - ELB 09/26/2023
     pickets= ["LRAL", "MIAR", "TEIG", "HKT", "DWPF","KVTX"]
-        
-    pf=PicketFence(picket_list=pickets,myargs=args,epics_prefix="L1:SEI-USGS_")
+    
+    #specify the data for the observatory we want to monitor:
+    observatory={
+                "LLO":{
+                    "Latitude": 30.5630,
+                    "Longitude":-90.7742,
+                    "EPICS_prefix":"L1:SEI-USGS_",
+                    },
+                }
+                    
+    #initialize a picket fence instance
+    pf=PicketFence(picket_list=pickets,myargs=args,epics_prefix=observatory["LLO"]["EPICS_prefix"], observatory_info=observatory) #TODO: change this backwards compatible call
     pf.run()
 
 if __name__ == '__main__':

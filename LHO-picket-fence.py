@@ -37,7 +37,16 @@ def main():
 	
 	#select the picket stations from the curated list of allowed stations - ELB 09/26/2023
     pickets= ["HLID", "NEW", "OTR", "MSO", "LAIR"]
-        
+	
+	#specify the data for the observatory we want to monitor:
+    observatory={
+                "LHO":{
+                    "Latitude": 46.4552,
+                    "Longitude":-119.4075,
+                    "EPICS_prefix":"H1:SEI-USGS_",
+                    },
+                }
+                
     pf=PicketFence(picket_list=pickets,myargs=args,epics_prefix="H1:SEI-USGS_")
     pf.run()
 
