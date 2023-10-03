@@ -258,7 +258,7 @@ class SeedlinkUpdater(SLClient):
         return ids
 class picketFenceArguments():
     def __init__(self, stream_time=3600, backtrace_time=15*60, x_position=0, y_position=0, x_size=800, y_size=600, title_size=10, time_legend_size=10,
-    tick_format='%H:%M:%S',time_tick_nb=5,threshold=500,lookback=120,update_time=1, min_scale=500, fullscreen=False,verbose=False,send_epics=False,epics_prefix=None):
+    tick_format='%H:%M:%S',time_tick_nb=5,threshold=500,lookback=120,update_time=1, min_scale=1000, fullscreen=False,verbose=False,send_epics=False,epics_prefix=None):
     
         #Plot format properties
         self.x_position=x_position              # horizontal position of the graph
@@ -270,7 +270,7 @@ class picketFenceArguments():
         self.tick_format=tick_format            # time format for the time ticks
         self.time_tick_nb=time_tick_nb          # number of time ticks
         self.fullscreen=fullscreen              # True toggles the fullscreen display
-        self.min_scale=250                      # Minimum scale for the plots [nm/s]
+        self.min_scale=min_scale                # Minimum scale for the plots [nm/s]
 
         #Data display properties
         self.backtrace_time=backtrace_time      # time (in seconds) that will be displayed in plots
@@ -788,8 +788,7 @@ class PicketFence():
             #Create the filtered stream and the plotter
             self.filtStream=filteredStream(self.stream, myargs=self.args)  
             self.master = SeedlinkPlotter(stream=self.filtStream, picket_dict=self.pickets, events=self.events, myargs=self.args, lock=self.lock, leave=self.leave) #, send_epics=args.epics)
-            self.picketMap=picketMap(picket_dict=self.pickets,central_station=self.observatory_info)
-            
+            self.picketMap=picketMap(picket_dict=self.pickets,central_station=self.observatory_info)       
             demo=ttk.Button(self.master, text="Map",command=lambda: threading.Thread(target=self.picketMap.generate_plot()).start())
             demo.pack()
             #Monitor the connections to seedlink
