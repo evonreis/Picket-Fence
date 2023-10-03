@@ -790,7 +790,7 @@ class PicketFence():
             self.master = SeedlinkPlotter(stream=self.filtStream, picket_dict=self.pickets, events=self.events, myargs=self.args, lock=self.lock, leave=self.leave) #, send_epics=args.epics)
             self.picketMap=picketMap(picket_dict=self.pickets,central_station=self.observatory_info)
             
-            demo=ttk.Button(self.master, text="Map",command=lambda: self.picketMap.generate_plot())
+            demo=ttk.Button(self.master, text="Map",command=lambda: threading.Thread(target=self.picketMap.generate_plot()).start())
             demo.pack()
             #Monitor the connections to seedlink
             self.watchers=[threading.Thread(target=self.watcher, args=(client.run,), daemon=True) for client in self.seedlink_clients] ## threads to monitor the connection with IRIS

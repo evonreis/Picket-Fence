@@ -47,7 +47,8 @@ def main():
                     },
                 }
                 
-    pf=PicketFence(picket_list=pickets,myargs=args,epics_prefix="H1:SEI-USGS_")
+    #initialize a picket fence instance
+    pf=PicketFence(picket_list=pickets,myargs=args,epics_prefix=observatory["LHO"]["EPICS_prefix"], observatory_info=observatory) #TODO: change this backwards compatible call
     pf.run()
 
 if __name__ == '__main__':
