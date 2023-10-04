@@ -411,7 +411,7 @@ class SeedlinkPlotter(tkinter.Tk):
     def __init__(self, stream=None, picket_dict=None, events=None, myargs=None, lock=None, leave=[False],
                  *args, **kwargs): # , send_epics=False
         tkinter.Tk.__init__(self, *args, **kwargs)
-        self.wm_title("seedlink-plotter {}".format("Picket Fence v2"))
+        self.wm_title("Picket Fence v2")
         self.focus_set()
         self._bind_keys()
         args = myargs
@@ -589,7 +589,7 @@ class SeedlinkPlotter(tkinter.Tk):
     
     def plot_lines(self, stream):
         
-        stream.sort()
+        stream.sort() #Ensures that the traces are in a set order before plotting (alphabetic order)
         self.figure.clear()
         fig = self.figure
 
@@ -607,11 +607,7 @@ class SeedlinkPlotter(tkinter.Tk):
         bbox = dict(boxstyle="round", fc="w", alpha=0.8)
         path_effects = [withStroke(linewidth=4, foreground="w")]
         pad = 10
-        for ax in fig.axes[::2]:
-            if MATPLOTLIB_VERSION[0] >= 2:
-                ax.set_facecolor("0.8")
-            else:
-                ax.set_axis_bgcolor("0.8")
+
         for ax in fig.axes:
             ax.set_title("")
             try:
@@ -645,14 +641,7 @@ class SeedlinkPlotter(tkinter.Tk):
             ax.yaxis.set_major_locator(locator)
             ax.yaxis.grid(True)
             ax.grid(True, axis="x")
-            if len(ax.lines) == 1:
-                ydata = ax.lines[0].get_ydata()
-                # if station has no data we add a dummy trace and we end up in
-                # a line with either 2 or 4 zeros (2 if dummy line is cut off
-                # at left edge of time axis)
-                if len(ydata) in [4, 2] and not ydata.any():  ## this is useless now
-                    if MATPLOTLIB_VERSION[0] >= 2:
-                        ax.set_facecolor("k") #Traces with no data turn black
+
         if OBSPY_VERSION >= [0, 10]:
             fig.axes[0].set_xlim(right=date2num(self.stop_time.datetime))
             fig.axes[0].set_xlim(left=date2num(self.start_time.datetime))
@@ -661,7 +650,7 @@ class SeedlinkPlotter(tkinter.Tk):
         fig.text(0.99, 0.97, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
                  ha="right", va="top", bbox=bbox, fontsize="medium")
 
-        ## change color of traces
+        ## change color of traces TODO: incorporate this into the previous for loop
         for j in range(len(stream)):
             trace = stream[j]  ## grab trace
             fig.axes[j].set_facecolor(self.tracePlotSpecs[trace.id]["COLOR"])
@@ -718,9 +707,6 @@ def initEpics(picket_dict, prefix):
     subprocess.Popen(["caput", prefix + "SERVER_START_GPS", start_time], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.Popen(["caput", prefix + "LAST_PROCESS_GPS", str(last_process_gps)], stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
-    
-
-#def updateEpics(picket_dict, prefix, updateMetadata):
 
 class PicketFence():
     def __init__(self, picket_list, myargs, epics_prefix,observatory_info=None):
