@@ -257,7 +257,7 @@ class SeedlinkUpdater(SLClient):
         ids.sort()
         return ids
 class picketFenceArguments():
-    def __init__(self, stream_time=3600, backtrace_time=15*60, x_position=0, y_position=0, x_size=800, y_size=600, title_size=10, time_legend_size=10,
+    def __init__(self, stream_time=3600, backtrace_time=15*60, x_position=0, y_position=0, x_size=800, y_size=600, title_size=12, time_legend_size=10,
     tick_format='%H:%M:%S',time_tick_nb=5,threshold=500,lookback=120,update_time=1, min_scale=1000, fullscreen=False,verbose=False,send_epics=False,epics_prefix=None):
     
         #Plot format properties
@@ -478,7 +478,7 @@ class SeedlinkPlotter(tkinter.Tk):
             (5000, "#FF2929","RED"),
             (1000, "orange","ORANGE"),
             (500, "yellow" ,"YELLOW"),
-            (0,"#D3D3D3","NORMAL"),
+            (0,"black","NORMAL"),#(0,"#D3D3D3","NORMAL"),
             ]        
         return(sorted(threshold_color_state,key=lambda tup: tup[0],reverse=True))
     
@@ -601,7 +601,7 @@ class SeedlinkPlotter(tkinter.Tk):
         # Change equal_scale to False if auto-scaling should be turned off
         stream.plot(fig=fig, method="fast", draw=False, equal_scale=False,
                     size=(self.args.x_size, self.args.y_size), title="",
-                    color='Blue', tick_format=self.args.tick_format,
+                    color='#4f4fff', tick_format=self.args.tick_format,
                     number_of_ticks=self.args.time_tick_nb)
         fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
         bbox = dict(boxstyle="round", fc="w", alpha=0.8)
@@ -618,14 +618,24 @@ class SeedlinkPlotter(tkinter.Tk):
                 pass
             else:
                 text.set_fontsize(self.args.title_size)
+                text.set_fontweight('bold')
+                text.set_x(0.05)#TODO: add this positioning to the default arguments that could be changed
+                
             xlabels = ax.get_xticklabels()
             ylabels = ax.get_yticklabels()
-            plt.setp(ylabels, ha="left", path_effects=path_effects)
+            plt.setp(ylabels, ha="left", path_effects=path_effects,fontsize=12)
             ax.yaxis.set_tick_params(pad=-pad)
             ylims_=np.array(ax.get_ylim())
             ylims_[0] = np.clip(ylims_[0], None, -self.args.min_scale)  ## changes made to fix min scaling
             ylims_[1] = np.clip(ylims_[1], self.args.min_scale, None)   ## changes made to fix max scaling
             ax.set_ylim(*ylims_)
+            
+            width_we_like=2
+            ax.spines["bottom"].set_linewidth(width_we_like)
+            ax.spines["top"].set_linewidth(width_we_like)
+            ax.spines["right"].set_linewidth(2*width_we_like)
+            ax.spines["left"].set_linewidth(2*width_we_like)
+            
             # treatment for bottom axes:
             if ax is fig.axes[-1]:
                 plt.setp(
@@ -639,8 +649,8 @@ class SeedlinkPlotter(tkinter.Tk):
                 plt.setp(xlabels, visible=False)
             locator = MaxNLocator(nbins=4, prune="both")
             ax.yaxis.set_major_locator(locator)
-            ax.yaxis.grid(True)
-            ax.grid(True, axis="x")
+            #ax.yaxis.grid(True,,)
+            ax.grid(True, axis="both",color='#666666',linewidth=0.5)
 
         if OBSPY_VERSION >= [0, 10]:
             fig.axes[0].set_xlim(right=date2num(self.stop_time.datetime))
