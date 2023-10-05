@@ -1,0 +1,15 @@
+{
+        "Anderson":{
+                "NORMAL":{"facecolor":"black"  ,"linecolor":"#4f4fff","boxcolor":"gray"},
+                "YELLOW":{"facecolor":"yellow" ,"linecolor":"blue"   ,"boxcolor":"gray"},
+                "ORANGE":{"facecolor":"orange" ,"linecolor":"blue"   ,"boxcolor":"gray"},
+                "RED":   {"facecolor":"#FF2929","linecolor":"blue"   ,"boxcolor":"gray"}
+            },
+            
+        "Classic":{
+                "NORMAL":{"facecolor":"#D3D3D3","linecolor":"blue","boxcolor":"gray"},
+                "YELLOW":{"facecolor":"yellow" ,"linecolor":"blue","boxcolor":"gray"},
+                "ORANGE":{"facecolor":"orange" ,"linecolor":"blue","boxcolor":"gray"},
+                "RED":   {"facecolor":"#FF2929","linecolor":"blue","boxcolor":"gray"}
+            }
+}

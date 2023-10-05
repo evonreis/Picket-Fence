@@ -56,13 +56,10 @@ from obspy import __version__ as OBSPY_VERSION
 from obspy.core import UTCDateTime
 from obspy.core.event import Catalog
 from obspy.core.util import MATPLOTLIB_VERSION
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from picketMapTools import picketMap
 import threading
-import os
 from time import sleep
-from datetime import datetime
 from gwpy.time import tconvert
 import subprocess
 import sys
@@ -444,7 +441,7 @@ class SeedlinkPlotter(tkinter.Tk):
         self.leave=leave
         self.stream = stream
         self.events = events
-        self.threshold_color_state=self._define_thresholds_and_colors()
+        self._define_thresholds_and_colors()
         self.threshold=self.args.threshold
         self.tracePlotSpecs=dict()
         self.lookback = args.lookback
@@ -475,13 +472,24 @@ class SeedlinkPlotter(tkinter.Tk):
         
     def _define_thresholds_and_colors(self):
         threshold_color_state=[
-            (5000, "#FF2929","RED"),
-            (1000, "orange","ORANGE"),
-            (500, "yellow" ,"YELLOW"),
-            (0,"black","NORMAL"),#(0,"#D3D3D3","NORMAL"),
-            ]        
-        return(sorted(threshold_color_state,key=lambda tup: tup[0],reverse=True))
-    
+            (5000, "RED"),
+            (1000, "ORANGE"),
+            (500, "YELLOW"),
+            (0,"NORMAL"),
+            ]
+        self.threshold_color_state=sorted(threshold_color_state,key=lambda tup: tup[0],reverse=True)
+        
+        with open('picket_fence_styles.json','r') as f: #TODO: make it not load ALL styles.
+            self.color_themes=json.load(f)
+        self.current_style=self.color_themes["Anderson"]
+        self.current_style_index=0; #TODO: change this so it dynamically picks the first style 
+        return
+    def change_styles(self, style_button):
+        self.current_style_index=(self.current_style_index+1)%len(self.color_themes)        
+        theme_name=list(self.color_themes.keys())[self.current_style_index]
+        
+        self.current_style=self.color_themes[theme_name]
+        style_button["text"]="Palette: "+theme_name
     def plot_graph(self):
         now = UTCDateTime()
         self.start_time = now - self.backtrace
@@ -504,10 +512,9 @@ class SeedlinkPlotter(tkinter.Tk):
                 if trace.id not in self.tracePlotSpecs:
                     self.tracePlotSpecs[trace.id]=dict()
                     
-                for (threshold, color, state) in self.threshold_color_state:
+                for (threshold, state) in self.threshold_color_state:
                     if max_val < threshold:
                         continue
-                    self.tracePlotSpecs[trace.id]["COLOR"]=color
                     self.tracePlotSpecs[trace.id]["STATE"]=state
                     break
                 
@@ -601,15 +608,17 @@ class SeedlinkPlotter(tkinter.Tk):
         # Change equal_scale to False if auto-scaling should be turned off
         stream.plot(fig=fig, method="fast", draw=False, equal_scale=False,
                     size=(self.args.x_size, self.args.y_size), title="",
-                    color='#4f4fff', tick_format=self.args.tick_format,
+                    tick_format=self.args.tick_format,
                     number_of_ticks=self.args.time_tick_nb)
         fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
         bbox = dict(boxstyle="round", fc="w", alpha=0.8)
         path_effects = [withStroke(linewidth=4, foreground="w")]
         pad = 10
-
-        for ax in fig.axes:
-            ax.set_title("")
+        
+        #Reformat all of the stream plots
+        for ax, trace in zip(fig.axes,stream):
+            ax.set_title("")         
+            #Format the text labels of all the traces
             try:
                 text = ax.texts[0]
             # we should always have a single text, which is the stream
@@ -630,6 +639,7 @@ class SeedlinkPlotter(tkinter.Tk):
             ylims_[1] = np.clip(ylims_[1], self.args.min_scale, None)   ## changes made to fix max scaling
             ax.set_ylim(*ylims_)
             
+            #Add boxes around the sides to separate the traces better
             width_we_like=2
             ax.spines["bottom"].set_linewidth(width_we_like)
             ax.spines["top"].set_linewidth(width_we_like)
@@ -649,8 +659,23 @@ class SeedlinkPlotter(tkinter.Tk):
                 plt.setp(xlabels, visible=False)
             locator = MaxNLocator(nbins=4, prune="both")
             ax.yaxis.set_major_locator(locator)
-            #ax.yaxis.grid(True,,)
+            
             ax.grid(True, axis="both",color='#666666',linewidth=0.5)
+            
+            ## change color of traces using the defined styles
+            tracestate=self.tracePlotSpecs[trace.id]["STATE"]
+            
+            ax.set_facecolor(self.current_style[tracestate]['facecolor'])
+            try:
+                line = ax.get_lines()[0]
+            # we should always have a single trace, but catch index errors just in case
+            except IndexError:
+                pass
+            else:
+                line.set_color(self.current_style[tracestate]['linecolor'])
+                
+            if trace_get_name(trace) in self.POTENTIAL_GLITCHES:  ## display glitch in a different color
+                ax.set_facecolor("#00FFFF")
 
         if OBSPY_VERSION >= [0, 10]:
             fig.axes[0].set_xlim(right=date2num(self.stop_time.datetime))
@@ -659,15 +684,7 @@ class SeedlinkPlotter(tkinter.Tk):
             bbox["alpha"] = 0.6
         fig.text(0.99, 0.97, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
                  ha="right", va="top", bbox=bbox, fontsize="medium")
-
-        ## change color of traces TODO: incorporate this into the previous for loop
-        for j in range(len(stream)):
-            trace = stream[j]  ## grab trace
-            fig.axes[j].set_facecolor(self.tracePlotSpecs[trace.id]["COLOR"])
-            if trace_get_name(trace) in self.POTENTIAL_GLITCHES:  ## display glitch in a different color
-                fig.axes[j].set_facecolor("#00FFFF")
-
-#####
+        
         fig.canvas.draw()
                             
 def trace_get_name(trace):
@@ -785,8 +802,15 @@ class PicketFence():
             self.filtStream=filteredStream(self.stream, myargs=self.args)  
             self.master = SeedlinkPlotter(stream=self.filtStream, picket_dict=self.pickets, events=self.events, myargs=self.args, lock=self.lock, leave=self.leave) #, send_epics=args.epics)
             self.picketMap=picketMap(picket_dict=self.pickets,central_station=self.observatory_info)       
-            demo=ttk.Button(self.master, text="Map",command=lambda: threading.Thread(target=self.picketMap.generate_plot()).start())
-            demo.pack()
+            
+
+            self.style_button=ttk.Button(self.master, text="Change Palette",command=lambda: threading.Thread(target=self.master.change_styles(self.style_button)).start())
+            self.style_button.pack(side=tkinter.RIGHT)
+            
+            self.map_button=ttk.Button(self.master, text="Map",command=lambda: threading.Thread(target=self.picketMap.generate_plot()).start())
+            self.map_button.pack()
+            
+            
             #Monitor the connections to seedlink
             self.watchers=[threading.Thread(target=self.watcher, args=(client.run,), daemon=True) for client in self.seedlink_clients] ## threads to monitor the connection with IRIS
         
