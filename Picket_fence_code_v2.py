@@ -680,9 +680,8 @@ class SeedlinkPlotter(tkinter.Tk):
         if OBSPY_VERSION >= [0, 10]:
             fig.axes[0].set_xlim(right=date2num(self.stop_time.datetime))
             fig.axes[0].set_xlim(left=date2num(self.start_time.datetime))
-        if len(fig.axes) > 5:
-            bbox["alpha"] = 0.6
-        fig.text(0.99, 0.97, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            
+        fig.text(0.99, 0.99, self.stop_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
                  ha="right", va="top", bbox=bbox, fontsize="medium")
         
         fig.canvas.draw()
