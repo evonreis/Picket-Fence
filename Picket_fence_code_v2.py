@@ -734,10 +734,24 @@ def initEpics(picket_dict, prefix):
     subprocess.Popen(["caput", prefix + "LAST_PROCESS_GPS", str(last_process_gps)], stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
 
+def load_pickets(picket_list):
+    pickets=dict()
+    ii=1
+    with open('possible_stations.json','r') as f:
+        data=json.load(f)
+    for station in picket_list:
+        if station in data.keys():
+           pickets[station]=data[station]
+           pickets[station]['index']=str(ii)
+           ii+=1
+           continue
+        print(station+" is not on the list of curated picket stations")
+    return pickets
+
 class PicketFence():
     def __init__(self, picket_list, myargs, epics_prefix,observatory_info=None):
         self.args=myargs
-        self.pickets=self.load_pickets(picket_list)
+        self.pickets=load_pickets(picket_list)
         self.stop_flag = False
         self.leave = [False]
         self.send_epics = self.args.send_epics
@@ -746,20 +760,6 @@ class PicketFence():
             assert type(epics_prefix) == str , "the epics prefix should be a string"
         self.args.epics_prefix=epics_prefix
         self.observatory_info=observatory_info
-        
-    def load_pickets(self, picket_list):
-        pickets=dict()
-        ii=1
-        with open('possible_stations.json','r') as f:
-            data=json.load(f)
-        for station in picket_list:
-            if station in data.keys():
-               pickets[station]=data[station]
-               pickets[station]['index']=str(ii)
-               ii+=1
-               continue
-            print(station+" is not on the list of curated picket stations")
-        return pickets
         
     def run(self):
         global start_time

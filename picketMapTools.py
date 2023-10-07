@@ -135,4 +135,4 @@ class picketMap():
         ax.add_geometries(self.picket_lines, crs=ccrs.PlateCarree(), edgecolor='k',facecolor="none", linestyle='-')
         
         fig.tight_layout()
-        fig.show()
+        plt.show()
