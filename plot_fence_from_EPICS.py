@@ -29,24 +29,41 @@ def main():
                             formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         '--ifo_name', type=str,
-                        help='LHO or LLO', required=True)
-    parser.add_argument(
-        '--longitude', type=float,
-                        help='longitude coordinate for the ifo', required=True)
-    parser.add_argument(
-        '--latitude', type=float,
-                        help='latitude coordinate for the ifo', required=True)
-    parser.add_argument(
-        '--EPICS_prefix', type=str,
-                        help='epics prefix for the picket fence, like "H1:SEI-USGS_"', required=True)
+                        help='"LHO" or "LLO"', required=True)
+#    parser.add_argument(
+#        '--longitude', type=float,
+#                        help='longitude coordinate for the ifo', required=True)
+#    parser.add_argument(
+#        '--latitude', type=float,
+#                        help='latitude coordinate for the ifo', required=True)
+#    parser.add_argument(
+#        '--EPICS_prefix', type=str,
+#                        help='epics prefix for the picket fence, like "H1:SEI-USGS_"', required=True)
 
     # parse the arguments
     runtimeArgs = parser.parse_args()
+    known_observatories={
+                "LLO":{
+                    "Latitude": 30.5630,
+                    "Longitude":-90.7742,
+                    "EPICS_prefix":"L1:SEI-USGS_",
+                    },
+                "LHO":{
+                    "Latitude": 46.4552,
+                    "Longitude":-119.4075,
+                    "EPICS_prefix":"H1:SEI-USGS_",
+                    }
+                }
     
-    epics_prefix=runtimeArgs.EPICS_prefix
+    if runtimeArgs.ifo_name not in known_observatories.keys():
+    	print(runtimeArgs.ifo_name ,'is not on the list of supported observatories. Options are "LHO" and "LLO". Exiting now')
+    	return
     
-    observatory=create_station_dict(runtimeArgs.ifo_name,runtimeArgs.longitude,runtimeArgs.latitude)
+    #observatory=create_station_dict(runtimeArgs.ifo_name,runtimeArgs.longitude,runtimeArgs.latitude)
+    observatory=create_station_dict(runtimeArgs.ifo_name,known_observatories[runtimeArgs.ifo_name]["Longitude"],known_observatories[runtimeArgs.ifo_name]["Latitude"])
     
+    #epics_prefix=runtimeArgs.EPICS_prefix
+    epics_prefix=known_observatories[runtimeArgs.ifo_name]["EPICS_prefix"]
     picket_list=[]
     for i in range(6): #TODO: make it realize how many EPICS pickets we have active
         picket_list.append(caget(epics_prefix+f"STATION_0{i+1}_NAME"))

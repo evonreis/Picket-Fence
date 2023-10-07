@@ -3,77 +3,77 @@
             "Latitude":33.0399,
             "Longitude":-86.9978,
             "Channel":"US_LRAL:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
             },
             
         "MIAR":{
             "Latitude":34.5454,
             "Longitude":-93.5765,
             "Channel":"US_MIAR:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
             },
             
         "TEIG":{
             "Latitude":20.226,
             "Longitude":-88.276,
             "Channel":"IU_TEIG:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
         },
         
         "HKT":{
             "Latitude":29.965,
             "Longitude":-95.838,
             "Channel":"IU_HKT:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
         },
         
         "DWPF":{
             "Latitude":28.11,
             "Longitude":-81.433,
             "Channel":"IU_DWPF:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
         },
         
         "735B":{
              "Latitude":28.8553,
              "Longitude":-97.8082,
              "Channel":"N4_735B:00HHZ",
-             "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+             "PreferredServer":"137.227.252.145:18000"
          },
          
         "KVTX":{
             "Latitude":27.546,
             "Longitude":-97.893,
             "Channel":"US_KVTX:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
         },
         
         "BBB":{
             "Latitude":52.1847,
             "Longitude":-128.1133,
             "Channel":"CN_BBB:HHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
             },
             
         "HLID":{
             "Latitude":43.562,
             "Longitude":-114.414,
             "Channel":"US_HLID:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
             },
             
         "NEW":{
             "Latitude":48.264,
             "Longitude":-117.123,
             "Channel":"US_NEW:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
         },
         
         "NLWA":{
             "Latitude":47.392,
             "Longitude":-123.869,
             "Channel":"US_NLWA:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
         },
         
         "OTR":{
@@ -87,7 +87,7 @@
             "Latitude":46.829,
             "Longitude":-113.941,
             "Channel":"US_MSO:00BHZ",
-            "PreferredServer":"cwbpub.cr.usgs.gov:18000"
+            "PreferredServer":"137.227.252.145:18000"
         },
         
         "LAIR":{
