@@ -225,7 +225,7 @@ class SeedlinkUpdater(SLClient):
         # new samples add to the main stream which is then trimmed
         with self.lock:
             self.stream += trace
-            self.stream.merge(0)
+            self.stream.merge(1,fill_value='interpolate')
             self.stream.trim(starttime=UTCDateTime()-3600)
             for trace in self.stream:
                 trace.stats.processing = []
@@ -394,7 +394,7 @@ class filteredStream(Stream):
             #Check for Glitches
             dummyTrace=trace.slice(starttime=UTCDateTime()-self.args.backtrace_time)
             if len(dummyTrace.data)!=0:
-                self.customMetadata[trace.id]['Glitch_ABSMAX']=dummyTrace.max()
+                self.customMetadata[trace.id]['Glitch_ABSMAX']=abs(dummyTrace.max())
             else: #We don't have recent data, reset all values to 0 and wait for more data
                 self.customMetadata[trace.id]['MAX']=0
                 self.customMetadata[trace.id]['MIN']=0
@@ -615,11 +615,13 @@ class SeedlinkPlotter(tkinter.Tk):
         bbox = dict(boxstyle="round", fc="w", alpha=0.8)
         path_effects = [withStroke(linewidth=4, foreground="w")]
         pad = 10
-        ## change color of traces using the defined styles
-        tracestate=self.tracePlotSpecs[trace.id]["STATE"]
+
+        
         
         #Reformat all of the stream plots
         for ax, trace in zip(fig.axes,stream):
+            
+            tracestate=self.tracePlotSpecs[trace.id]["STATE"]
             ax.set_title("")         
             #Format the text labels of all the traces
             try:
@@ -629,8 +631,8 @@ class SeedlinkPlotter(tkinter.Tk):
             except IndexError:
                 pass
             else:
-                if tracestate !="NORMAL":
-                    text.set_text(text.get_text()+" | "+ str(round_nm_to_microns(stream.customMetadata[trace.id]['MAX'],2))+u" \u03BCm/s")
+                if tracestate !="NORMAL" or trace_get_name(trace) in self.POTENTIAL_GLITCHES:
+                    text.set_text(text.get_text()+" | "+ str(round_nm_to_microns(stream.customMetadata[trace.id]['Glitch_ABSMAX'],2))+u" \u03BCm/s")
                 text.set_fontsize(self.args.title_size)
                 text.set_fontweight('bold')
                 text.set_x(0.05)#TODO: add this positioning to the default arguments that could be changed
