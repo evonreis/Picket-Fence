@@ -632,7 +632,10 @@ class SeedlinkPlotter(tkinter.Tk):
                 pass
             else:
                 if tracestate !="NORMAL" or trace_get_name(trace) in self.POTENTIAL_GLITCHES:
-                    text.set_text(text.get_text()+" | "+ str(round_nm_to_microns(stream.customMetadata[trace.id]['Glitch_ABSMAX'],2))+u" \u03BCm/s")
+                    added_text=""
+                    if trace_get_name(trace) in self.POTENTIAL_GLITCHES:
+                        added_text=" |GLITCHING"
+                    text.set_text(text.get_text()+" | "+ str(round_nm_to_microns(stream.customMetadata[trace.id]['Glitch_ABSMAX'],2))+u" \u03BCm/s"+added_text)
                 text.set_fontsize(self.args.title_size)
                 text.set_fontweight('bold')
                 text.set_x(0.05)#TODO: add this positioning to the default arguments that could be changed
