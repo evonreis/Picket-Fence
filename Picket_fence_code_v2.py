@@ -615,6 +615,8 @@ class SeedlinkPlotter(tkinter.Tk):
         bbox = dict(boxstyle="round", fc="w", alpha=0.8)
         path_effects = [withStroke(linewidth=4, foreground="w")]
         pad = 10
+        ## change color of traces using the defined styles
+        tracestate=self.tracePlotSpecs[trace.id]["STATE"]
         
         #Reformat all of the stream plots
         for ax, trace in zip(fig.axes,stream):
@@ -627,6 +629,8 @@ class SeedlinkPlotter(tkinter.Tk):
             except IndexError:
                 pass
             else:
+                if tracestate !="NORMAL":
+                    text.set_text(text.get_text()+" | "+ str(round_nm_to_microns(stream.customMetadata[trace.id]['MAX'],2))+u" \u03BCm/s")
                 text.set_fontsize(self.args.title_size)
                 text.set_fontweight('bold')
                 text.set_x(0.05)#TODO: add this positioning to the default arguments that could be changed
@@ -663,9 +667,6 @@ class SeedlinkPlotter(tkinter.Tk):
             
             ax.grid(True, axis="both",color='#666666',linewidth=0.5)
             
-            ## change color of traces using the defined styles
-            tracestate=self.tracePlotSpecs[trace.id]["STATE"]
-            
             ax.set_facecolor(self.current_style[tracestate]['facecolor'])
             try:
                 line = ax.get_lines()[0]
@@ -696,6 +697,8 @@ def name_get_trace(stream, name):
             return trace
     return "No trace with that name"
 
+def round_nm_to_microns(V_in_nm_per_sec,digits):
+        return(round(V_in_nm_per_sec/1000,-(int(np.floor(np.log10(abs(V_in_nm_per_sec/1000))))-(digits-1))))
 
 def ID_Creator(s):
     return int(''.join(str(format(ord(c), "x")) for c in s), 16)
