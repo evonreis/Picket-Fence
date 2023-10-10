@@ -225,7 +225,7 @@ class SeedlinkUpdater(SLClient):
         # new samples add to the main stream which is then trimmed
         with self.lock:
             self.stream += trace
-            self.stream.merge(1,fill_value='interpolate')
+            self.stream.merge(0)
             self.stream.trim(starttime=UTCDateTime()-3600)
             for trace in self.stream:
                 trace.stats.processing = []
@@ -509,6 +509,7 @@ class SeedlinkPlotter(tkinter.Tk):
                 max_val=np.max([abs(stream.customMetadata[trace.id]['MAX']),abs(stream.customMetadata[trace.id]['MIN'])])
                 max_val_over_trace=stream.customMetadata[trace.id]['Glitch_ABSMAX']
                 trace_name=trace.stats.station
+
                 if trace.id not in self.tracePlotSpecs:
                     self.tracePlotSpecs[trace.id]=dict()
                     
@@ -518,7 +519,7 @@ class SeedlinkPlotter(tkinter.Tk):
                     self.tracePlotSpecs[trace.id]["STATE"]=state
                     break
                 
-                if max_val > self.glitch_threshold and self.large_EQ_cooldown==0:  ## potential glitch and no large EQ
+                if max_val_over_trace > self.glitch_threshold and self.large_EQ_cooldown==0:  ## potential glitch and no large EQ
                     if trace_name not in self.POTENTIAL_GLITCHES:
                         self.POTENTIAL_GLITCHES.append(trace_name)
                 else:
@@ -673,7 +674,7 @@ class SeedlinkPlotter(tkinter.Tk):
                 pass
             else:
                 line.set_color(self.current_style[tracestate]['linecolor'])
-                
+
             if trace_get_name(trace) in self.POTENTIAL_GLITCHES:  ## display glitch in a different color
                 ax.set_facecolor("#00FFFF")
 
