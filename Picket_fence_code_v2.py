@@ -394,7 +394,7 @@ class filteredStream(Stream):
             #Check for Glitches
             dummyTrace=trace.slice(starttime=UTCDateTime()-self.args.backtrace_time)
             if len(dummyTrace.data)!=0:
-                self.customMetadata[trace.id]['Glitch_ABSMAX']=dummyTrace.max()
+                self.customMetadata[trace.id]['Glitch_ABSMAX']=abs(dummyTrace.max())
             else: #We don't have recent data, reset all values to 0 and wait for more data
                 self.customMetadata[trace.id]['MAX']=0
                 self.customMetadata[trace.id]['MIN']=0
@@ -509,6 +509,7 @@ class SeedlinkPlotter(tkinter.Tk):
                 max_val=np.max([abs(stream.customMetadata[trace.id]['MAX']),abs(stream.customMetadata[trace.id]['MIN'])])
                 max_val_over_trace=stream.customMetadata[trace.id]['Glitch_ABSMAX']
                 trace_name=trace.stats.station
+
                 if trace.id not in self.tracePlotSpecs:
                     self.tracePlotSpecs[trace.id]=dict()
                     
@@ -518,7 +519,7 @@ class SeedlinkPlotter(tkinter.Tk):
                     self.tracePlotSpecs[trace.id]["STATE"]=state
                     break
                 
-                if max_val > self.glitch_threshold and self.large_EQ_cooldown==0:  ## potential glitch and no large EQ
+                if max_val_over_trace > self.glitch_threshold and self.large_EQ_cooldown==0:  ## potential glitch and no large EQ
                     if trace_name not in self.POTENTIAL_GLITCHES:
                         self.POTENTIAL_GLITCHES.append(trace_name)
                 else:
@@ -614,9 +615,13 @@ class SeedlinkPlotter(tkinter.Tk):
         bbox = dict(boxstyle="round", fc="w", alpha=0.8)
         path_effects = [withStroke(linewidth=4, foreground="w")]
         pad = 10
+
+        
         
         #Reformat all of the stream plots
         for ax, trace in zip(fig.axes,stream):
+            
+            tracestate=self.tracePlotSpecs[trace.id]["STATE"]
             ax.set_title("")         
             #Format the text labels of all the traces
             try:
@@ -626,6 +631,11 @@ class SeedlinkPlotter(tkinter.Tk):
             except IndexError:
                 pass
             else:
+                if tracestate !="NORMAL" or trace_get_name(trace) in self.POTENTIAL_GLITCHES:
+                    added_text=""
+                    if trace_get_name(trace) in self.POTENTIAL_GLITCHES:
+                        added_text=" |GLITCHING"
+                    text.set_text(text.get_text()+" | "+ str(round_nm_to_microns(stream.customMetadata[trace.id]['Glitch_ABSMAX'],2))+u" \u03BCm/s"+added_text)
                 text.set_fontsize(self.args.title_size)
                 text.set_fontweight('bold')
                 text.set_x(0.05)#TODO: add this positioning to the default arguments that could be changed
@@ -662,9 +672,6 @@ class SeedlinkPlotter(tkinter.Tk):
             
             ax.grid(True, axis="both",color='#666666',linewidth=0.5)
             
-            ## change color of traces using the defined styles
-            tracestate=self.tracePlotSpecs[trace.id]["STATE"]
-            
             ax.set_facecolor(self.current_style[tracestate]['facecolor'])
             try:
                 line = ax.get_lines()[0]
@@ -673,7 +680,7 @@ class SeedlinkPlotter(tkinter.Tk):
                 pass
             else:
                 line.set_color(self.current_style[tracestate]['linecolor'])
-                
+
             if trace_get_name(trace) in self.POTENTIAL_GLITCHES:  ## display glitch in a different color
                 ax.set_facecolor("#00FFFF")
 
@@ -695,6 +702,8 @@ def name_get_trace(stream, name):
             return trace
     return "No trace with that name"
 
+def round_nm_to_microns(V_in_nm_per_sec,digits):
+        return(round(V_in_nm_per_sec/1000,-(int(np.floor(np.log10(abs(V_in_nm_per_sec/1000))))-(digits-1))))
 
 def ID_Creator(s):
     return int(''.join(str(format(ord(c), "x")) for c in s), 16)
