@@ -85,7 +85,7 @@ def main():
         pickets[station]['index']=str(ii)
         ii+=1
         
-    pf=PicketFence(picket_dict=pickets,myargs=args,epics_prefix="H1:SEI-USGS_")
+    pf=PicketFence(picket_dict=pickets,myargs=args,epics_prefix="H3:SEI-USGS_")
     pf.run()
 
 if __name__ == '__main__':
