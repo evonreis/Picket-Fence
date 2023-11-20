@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from pcaspy import Driver, SimpleServer
 from gpstime import gpsnow, gpstime
 from socket import gethostname
 import os
