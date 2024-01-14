@@ -1,4 +1,74 @@
-{
+{        
+		"735B":{
+             "Latitude":28.8553,
+             "Longitude":-97.8082,
+             "Channel":"N4_735B:00HHZ",
+             "PreferredServer":"137.227.252.145:18000"
+             },
+                 
+        "BBB":{
+            "Latitude":52.1847,
+            "Longitude":-128.1133,
+            "Channel":"CN_BBB:HHZ",
+            "PreferredServer":"137.227.252.145:18000"
+        	},
+        
+        "CAVE":{
+            "Latitude":42.12087,
+            "Longitude":-123.57071,
+            "Channel":"UO_CAVE:HHZ",
+            "PreferredServer":"pnsndata.ess.washington.edu:18000"
+        	},
+        
+        "COR":{
+            "Latitude":44.5855,
+            "Longitude":-123.3046,
+            "Channel":"IU_COR:00HHZ",
+            "PreferredServer":"137.227.252.145:18000"
+            },
+        	
+        "DING":{
+            "Latitude":42.86189,
+            "Longitude":-124.05399,
+            "Channel":"UO_DING:HHZ",
+            "PreferredServer":"pnsndata.ess.washington.edu:18000"
+        	},
+        
+        "DWPF":{
+            "Latitude":28.11,
+            "Longitude":-81.433,
+            "Channel":"IU_DWPF:00BHZ",
+            "PreferredServer":"137.227.252.145:18000"
+            },
+        
+        "HLID":{
+            "Latitude":43.562,
+            "Longitude":-114.414,
+            "Channel":"US_HLID:00BHZ",
+            "PreferredServer":"137.227.252.145:18000"
+            },
+		
+		"HKT":{
+            "Latitude":29.965,
+            "Longitude":-95.838,
+            "Channel":"IU_HKT:00BHZ",
+            "PreferredServer":"137.227.252.145:18000"
+        	},
+         
+        "KVTX":{
+            "Latitude":27.546,
+            "Longitude":-97.893,
+            "Channel":"US_KVTX:00BHZ",
+            "PreferredServer":"137.227.252.145:18000"
+        	},
+        
+        "LAIR":{
+            "Latitude":43.16148,
+            "Longitude":-123.93143,
+            "Channel":"UO_LAIR:HHZ",
+            "PreferredServer":"pnsndata.ess.washington.edu:18000"
+        	},
+            
         "LRAL":{
             "Latitude":33.0399,
             "Longitude":-86.9978,
@@ -12,88 +82,46 @@
             "Channel":"US_MIAR:00BHZ",
             "PreferredServer":"137.227.252.145:18000"
             },
-            
-        "TEIG":{
-            "Latitude":20.226,
-            "Longitude":-88.276,
-            "Channel":"IU_TEIG:00BHZ",
-            "PreferredServer":"137.227.252.145:18000"
-        },
-        
-        "HKT":{
-            "Latitude":29.965,
-            "Longitude":-95.838,
-            "Channel":"IU_HKT:00BHZ",
-            "PreferredServer":"137.227.252.145:18000"
-        },
-        
-        "DWPF":{
-            "Latitude":28.11,
-            "Longitude":-81.433,
-            "Channel":"IU_DWPF:00BHZ",
-            "PreferredServer":"137.227.252.145:18000"
-        },
-        
-        "735B":{
-             "Latitude":28.8553,
-             "Longitude":-97.8082,
-             "Channel":"N4_735B:00HHZ",
-             "PreferredServer":"137.227.252.145:18000"
-         },
-         
-        "KVTX":{
-            "Latitude":27.546,
-            "Longitude":-97.893,
-            "Channel":"US_KVTX:00BHZ",
-            "PreferredServer":"137.227.252.145:18000"
-        },
-        
-        "BBB":{
-            "Latitude":52.1847,
-            "Longitude":-128.1133,
-            "Channel":"CN_BBB:HHZ",
-            "PreferredServer":"137.227.252.145:18000"
-            },
-            
-        "HLID":{
-            "Latitude":43.562,
-            "Longitude":-114.414,
-            "Channel":"US_HLID:00BHZ",
-            "PreferredServer":"137.227.252.145:18000"
-            },
-            
-        "NEW":{
-            "Latitude":48.264,
-            "Longitude":-117.123,
-            "Channel":"US_NEW:00BHZ",
-            "PreferredServer":"137.227.252.145:18000"
-        },
-        
-        "NLWA":{
-            "Latitude":47.392,
-            "Longitude":-123.869,
-            "Channel":"US_NLWA:00BHZ",
-            "PreferredServer":"137.227.252.145:18000"
-        },
-        
-        "OTR":{
-            "Latitude":48.08632 ,
-            "Longitude":-124.34518,
-            "Channel":"UW_OTR:HHZ",
-            "PreferredServer":"pnsndata.ess.washington.edu:18000"
-        },
         
         "MSO":{
             "Latitude":46.829,
             "Longitude":-113.941,
             "Channel":"US_MSO:00BHZ",
             "PreferredServer":"137.227.252.145:18000"
-        },
+        	},
         
-        "LAIR":{
-            "Latitude":43.16148,
-            "Longitude":-123.93143,
-            "Channel":"UO_LAIR:HHZ",
+        "NEW":{
+            "Latitude":48.264,
+            "Longitude":-117.123,
+            "Channel":"US_NEW:00BHZ",
+            "PreferredServer":"137.227.252.145:18000"
+        	},
+        
+        "NLWA":{
+            "Latitude":47.392,
+            "Longitude":-123.869,
+            "Channel":"US_NLWA:00BHZ",
+            "PreferredServer":"137.227.252.145:18000"
+        	},
+        
+        "OTR":{
+            "Latitude":48.08632 ,
+            "Longitude":-124.34518,
+            "Channel":"UW_OTR:HHZ",
             "PreferredServer":"pnsndata.ess.washington.edu:18000"
-        }
+        	},
+        	
+        "SISQ":{
+            "Latitude":42.275352,
+            "Longitude":-123.632322,
+            "Channel":"UW_SISQ:HHZ",
+            "PreferredServer":"pnsndata.ess.washington.edu:18000"
+        	},
+            
+        "TEIG":{
+            "Latitude":20.226,
+            "Longitude":-88.276,
+            "Channel":"IU_TEIG:00BHZ",
+            "PreferredServer":"137.227.252.145:18000"
+        	}
 }
