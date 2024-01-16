@@ -37,6 +37,7 @@ def main():
 	
 	#select the picket stations from the curated list of allowed stations - ELB 09/26/2023
     pickets= ["HLID", "NEW", "OTR", "MSO", "LAIR"]
+    # pickets= ["HLID", "NEW", "MSO"]
 	
 	#specify the data for the observatory we want to monitor:
     observatory={

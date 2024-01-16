@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import subprocess
 import sys
@@ -10,7 +10,7 @@ def main():
     
     prefix = 'H1:SEI-USGS_'
     path= "Picket_fence_EPICS_server_v2.py"
-    subprocess.Popen(['python', path, prefix])
+    subprocess.Popen(['python3', path, prefix])
     sys.exit(0)
 
 
