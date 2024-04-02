@@ -54,7 +54,14 @@
             "Channel":"IU_HKT:00BHZ",
             "PreferredServer":"137.227.252.145:18000"
         	},
-         
+        	
+		"HWUT":{
+            "Latitude":41.6069,
+            "Longitude":-111.5652,
+            "Channel":"US_HWUT:00BHZ",
+            "PreferredServer":"137.227.252.145:18000"
+        	},
+        	
         "KVTX":{
             "Latitude":27.546,
             "Longitude":-97.893,
