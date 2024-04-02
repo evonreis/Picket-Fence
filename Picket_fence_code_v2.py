@@ -57,7 +57,16 @@ from obspy.core import UTCDateTime
 from obspy.core.event import Catalog
 from obspy.core.util import MATPLOTLIB_VERSION
 
-from picketMapTools import picketMap
+
+cartopyflag=1;
+try:
+    import cartopy
+    from picketMapTools import picketMap
+except ImportError:
+    cartopyflag=0;
+    pass
+
+
 import threading
 from time import sleep
 from gwpy.time import tconvert
@@ -298,9 +307,9 @@ class filteredStream(Stream):
         self.rawStream = rawStream
         self.traces=rawStream.copy().traces
         
-        #Define Brian's Lowpass filter that doesn't distort EQs [SEI aLog 2264]
-        num =[ 0, 0.4726, 0.8728, 20.9151, 16.5637, 138.7922, 43.0012, 170.2783, 19.9420, 52.9641 ,0]
-        den =[1.0000, 9.8557, 58.9535, 206.3141, 468.0879, 754.8555, 591.8468, 463.7391, 184.1213, 70.7469, 6.7789]
+        #Define Edgard's modification to the Lowpass filter that doesn't distort EQs [SEI aLog 2372] - NOTE: 5 second delay in this filter
+        num =[0,	0.76318885484945,	0.90992993724968,	21.7100277548763,	19.255568102408,	75.3052756093984,	24.3578154023362,	64.5048931618441,	7.30919499736169,	15.8338176261434,	0]
+        den =[1,	14.6909055035109,	78.5925152790263,	590.325637467408,	677.92614780260,	727.928526646198,	471.445913748708,	250.464075026040,	88.1450949736601,	22.7381207863554,	1.84567521372509]
         self.filter=(num,den)
         
         #Internal states for Brian's filter
@@ -808,16 +817,16 @@ class PicketFence():
             
             #Create the filtered stream and the plotter
             self.filtStream=filteredStream(self.stream, myargs=self.args)  
-            self.master = SeedlinkPlotter(stream=self.filtStream, picket_dict=self.pickets, events=self.events, myargs=self.args, lock=self.lock, leave=self.leave) #, send_epics=args.epics)
-            self.picketMap=picketMap(picket_dict=self.pickets,central_station=self.observatory_info)       
+            self.master = SeedlinkPlotter(stream=self.filtStream, picket_dict=self.pickets, events=self.events, myargs=self.args, lock=self.lock, leave=self.leave) #, send_epics=args.epics)     
             
 
             self.style_button=ttk.Button(self.master, text="Change Palette",command=lambda: threading.Thread(target=self.master.change_styles(self.style_button)).start())
             self.style_button.pack(side=tkinter.RIGHT)
             
-            self.map_button=ttk.Button(self.master, text="Map",command=lambda: threading.Thread(target=self.picketMap.generate_plot()).start())
-            self.map_button.pack()
-            
+            if cartopyflag==1:
+                self.picketMap=picketMap(picket_dict=self.pickets,central_station=self.observatory_info)  
+                self.map_button=ttk.Button(self.master, text="Map",command=lambda: threading.Thread(target=self.picketMap.generate_plot()).start())
+                self.map_button.pack()
             
             #Monitor the connections to seedlink
             self.watchers=[threading.Thread(target=self.watcher, args=(client.run,), daemon=True) for client in self.seedlink_clients] ## threads to monitor the connection with IRIS
