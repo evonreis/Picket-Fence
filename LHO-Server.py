@@ -5,7 +5,7 @@ from socket import gethostname
 import os
 import time
 import threading
-from softioc import SoftIOC
+from ligo_softioc import SoftIOC
 
 
 def func(n):  ## creates all our EPIC variables
@@ -39,7 +39,7 @@ def func(n):  ## creates all our EPIC variables
     dic = {}
     dic["NETWORK_AUX3"] = {'type' : 'int'}
     dicts.append(dic)
-        
+
 
     return dicts
 
