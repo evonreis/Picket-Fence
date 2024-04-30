@@ -56,6 +56,7 @@ from obspy import __version__ as OBSPY_VERSION
 from obspy.core import UTCDateTime
 from obspy.core.event import Catalog
 from obspy.core.util import MATPLOTLIB_VERSION
+from obspy.clients.seedlink.seedlinkexception import SeedLinkException
 
 
 cartopyflag=1;
@@ -186,7 +187,12 @@ class SeedlinkUpdater(SLClient):
                 print("Packet count reset to 1")
             else:
                 count += 1
-            slpack = self.slconn.collect()
+            try:
+                slpack = self.slconn.collect()
+            except TimeoutError:
+                print(f"Timeout waiting for packet from server '{str(self.slconn.get_sl_address())}'.")
+            except SeedLinkException as e:
+                print(f"Seedlink error '{str(e)}' while waiting for packet from server '{str(self.slconn.get_sl_address())}'.")
             if self.stop_flag:
                 break
 
@@ -364,7 +370,8 @@ class filteredStream(Stream):
                     dt = trace.stats.delta
                     newTrace=trace.slice(starttime=oldEndtime+dt)
                     trace_len=len(newTrace.data)
-
+                    if trace_len < 1:
+                        break
                     #filter the new data and trim
                     xin=self.customMetadata[newTrace.id]['filterState'];
                     T=np.arange(0.0, trace_len)
@@ -851,10 +858,12 @@ class PicketFence():
             sleep(20)  ## possible that this pings too often. Maybe exponential with some MAX?? (ASK EDGARD)
             if not thread.is_alive():  ## connection lost
                 ## these are probably unnecessary
-                print("Picket fence script is dead. Attempting a restart")
-                self.stop_flag = True  ## killing thread (I am basically resetting the entire main function with this)
-                for client in self.seedlink_clients:
-                    client.stop_flag=True
-                thread.join()
-                self.master.quit()  ## letting main thread break out of mainloop
-                break  ## allowing watching_conn to leave scope (terminating)
+                print("A picket fence thread is dead. Attempting a restart")
+                thread = threading.Thread(target=function, daemon=True)
+                thread.start()
+                # self.stop_flag = True  ## killing thread (I am basically resetting the entire main function with this)
+                # for client in self.seedlink_clients:
+                #     client.stop_flag=True
+                # thread.join()
+                # self.master.quit()  ## letting main thread break out of mainloop
+                # ## break  ## allowing watching_conn to leave scope (terminating)
