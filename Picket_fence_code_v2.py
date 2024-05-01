@@ -370,22 +370,21 @@ class filteredStream(Stream):
                     dt = trace.stats.delta
                     newTrace=trace.slice(starttime=oldEndtime+dt)
                     trace_len=len(newTrace.data)
-                    if trace_len < 1:
-                        break
-                    #filter the new data and trim
-                    xin=self.customMetadata[newTrace.id]['filterState'];
-                    T=np.arange(0.0, trace_len)
-                    T *= dt
-                    tout, yout, xout =signal.lsim(self.filter, newTrace.data, T, X0=xin)
-                    newTrace.data = yout
-                    
-                    #Update the trace metadata
-                    self.customMetadata[trace.id]['MAX']=np.max(newTrace.data)
-                    self.customMetadata[trace.id]['MIN']=np.min(newTrace.data)
-                    self.customMetadata[trace.id]['MEAN']=np.mean(newTrace.data)                    
-                    self.customMetadata[newTrace.id]['filterState']=xout[-1]
-                    self.customMetadata[newTrace.id]['endtime']=newTrace.stats.endtime
-                    self.append(newTrace)
+                    if trace_len > 0:
+                        #filter the new data and trim
+                        xin=self.customMetadata[newTrace.id]['filterState'];
+                        T=np.arange(0.0, trace_len)
+                        T *= dt
+                        tout, yout, xout =signal.lsim(self.filter, newTrace.data, T, X0=xin)
+                        newTrace.data = yout
+
+                        #Update the trace metadata
+                        self.customMetadata[trace.id]['MAX']=np.max(newTrace.data)
+                        self.customMetadata[trace.id]['MIN']=np.min(newTrace.data)
+                        self.customMetadata[trace.id]['MEAN']=np.mean(newTrace.data)
+                        self.customMetadata[newTrace.id]['filterState']=xout[-1]
+                        self.customMetadata[newTrace.id]['endtime']=newTrace.stats.endtime
+                        self.append(newTrace)
                     
             else:#This trace is only present in the raw stream but has never been filtered
                 newTrace=trace.copy()
