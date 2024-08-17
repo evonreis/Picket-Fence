@@ -40,6 +40,13 @@
             "Channel":"IU_DWPF:00BHZ",
             "PreferredServer":"137.227.252.145:18000"
             },
+            
+        	"HDC":{
+           "Latitude":10.00201,
+           "Longitude":-84.11142,
+           "Channel":"G_HDC:00BHZ",
+           "PreferredServer":"137.227.252.145:18000"
+       	},
         
         "HLID":{
             "Latitude":43.562,
@@ -128,7 +135,14 @@
         "TEIG":{
             "Latitude":20.226,
             "Longitude":-88.276,
-            "Channel":"IU_TEIG:00BHZ",
+            "Channel":"IU_TEIG:00HHZ",
             "PreferredServer":"137.227.252.145:18000"
-        	}
+        	},
+        	
+        	"TGUH":{
+           "Latitude":14.057,
+           "Longitude":-87.273,
+           "Channel":"CU_TGUH:00BHZ",
+           "PreferredServer":"137.227.252.145:18000"
+       	}
 }
