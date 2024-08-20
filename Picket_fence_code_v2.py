@@ -560,7 +560,7 @@ class SeedlinkPlotter(tkinter.Tk):
             logging.error(e)
             pass
         dt=UTCDateTime()-now
-        self.after(int(np.max([self.args.update_time-dt,0]) * 1000), self.plot_graph)
+        self.after(int(np.max([self.args.update_time-dt,0.01]) * 1000), self.plot_graph)
     
     def post_EPICS(self,stream):
         #TODO: Handle glitches independent of posting the EPICS
